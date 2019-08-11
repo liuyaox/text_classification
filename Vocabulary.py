@@ -28,11 +28,12 @@ class Vocabulary(object):
         self.idx2token_init = {PAD_TOKEN: 'PAD', UNK_TOKEN: 'UNK', SOS_TOKEN: 'SOS', EOS_TOKEN: 'EOS'}
         
         # Word Level
-        self.word_trimmed = False       # 是否已过滤低频word
         self.word2idx = self.token2idx_init    # TODO 原来是没有{'PAD': PAD_TOKEN, ...}的？
         self.idx2word = self.idx2token_init    # TODO 只存在于word中么？
         self.word2count = {}
         self.num_words = 4
+        self.word_trimmed = False       # 是否已过滤低频word
+        self.word_stopwords = None      # 低频停用词
         
         self.word_emb_dim = 0
         self.word2vector = {}
@@ -40,11 +41,12 @@ class Vocabulary(object):
         self.word_emb_matrix = None     # Embedding Layer Weights Matrix
         
         # Char Level
-        self.char_trimmed = False       # 是否已过滤低频char
         self.char2idx = {}          # TODO self.token2idx_init ???
         self.idx2char = {}
         self.char2count = {}
         self.num_chars = 0
+        self.char_trimmed = False       # 是否已过滤低频char
+        self.char_stopwords = None
         
         self.char_emb_dim = 0
         self.char2vector = {}
@@ -141,6 +143,8 @@ class Vocabulary(object):
         if (level == 'word' and self.word_trimmed) or (level == 'char' and self.char_trimmed):
             return
         if level == 'word':
+            self.word_stopwords = [word for word, cnt in self.word2count.items() if cnt < min_count]
+            
             kept = [word for word, cnt in self.word2count.items() if cnt >= min_count]
             print(f'kept words: {len(kept)} / {len(self.word2idx)} = {len(kept) / len(self.word2idx): .4f}')
             self.word2idx = self.token2idx_init
@@ -150,7 +154,9 @@ class Vocabulary(object):
             for word in kept:
                 self.add_token(word, level='word')
             self.word_trimmed = True
+            
         else:
+            self.char_stopwords = [char for char, cnt in self.char2count.items() if cnt < min_count]
             kept = [char for char, cnt in self.char2count.items() if cnt >= min_count]
             print(f'kept chars: {len(kept)} / {len(self.char2idx)} = {len(kept) / len(self.char2idx): .4f}')
             self.char2idx = {}
@@ -162,8 +168,8 @@ class Vocabulary(object):
             self.char_trimmed = True
     
     
-    # 3. 创建xxx2vector: word, char及其idx到vector的映射字典
-    def init_vector(self, embedding=None, level='word'):
+    # 3. 创建xxx2vector: (word/char, idx) --> vector
+    def init_vectors(self, embedding=None, level='word'):
         """
         基于训练好的word/char embedding，初始化word2vector或char2vector及其对应的idx2vector
         其中embedding既可以是公开训练好的，也可以是自己训练好的，前者过于巨大，
@@ -214,33 +220,33 @@ class Vocabulary(object):
 
 
 # 一些与Vocabulary相关的工具
-
+# TODO classmethod ???
 def seq_to_idxs(seq, token2idx, token_maxlen, unk_idx=UNK_TOKEN, pad_idx=PAD_TOKEN, 
-                padding='post', truncating='post', including=[], excluding=[]):
+                padding='post', truncating='post', onlyin=None, excluding=[]):
     """
     向量化编码：基于词汇表token2idx，把seq转化为idx向量，词汇表中不存在的token使用unk_idx进行编码，适用于特征编码和Label编码
     输入seq是分词/分字列表，如：['我', '们', '爱', '学', '习'] 或 ['我们', '爱', '学习']
-    功能 = 向量化 + keras.sequence.pad_sequence
+    函数功能 = 向量化 + keras.sequence.pad_sequence
     ARGS
-        including: 只关注这里面的token
-        excluding: 排除这里面的token
+        padding & truncating: post=从后面补零/截断  pre=从前面
+        onlyin: 只关注这里面的token
+        excluding: 不关注这里面的token
     NOTE
-        当including和excluding都存在时同时满足条件，即token in including and token not in excluding
+        当onlyin和excluding都存在时同时满足条件，即token in onlyin and token not in excluding
     """
-    if len(including) > 0:
-        seq = [token for token in seq if token in including]
-    seq = [token for token in seq if token not in excluding + ['', ' ']]    # TODO ['', ' ']???
+    if onlyin:
+        seq = [token for token in seq if token in onlyin]
+    seq = [token for token in seq if token not in excluding + ['', ' ']]        # TODO ['', ' ']???
     
-    seq_vec = [token2idx.get(token, unk_idx) for token in seq]    # OOV的token标注为专门的unk_idx
-    seq_vec = seq_vec[: token_maxlen] if truncating == 'post' else seq_vec[-token_maxlen:]  # 截断：前或后
+    seq_vec = [token2idx.get(token, unk_idx) for token in seq]                  # OOV的token标注为专门的unk_idx
+    seq_vec = seq_vec[: token_maxlen] if truncating == 'post' else seq_vec[-token_maxlen:]      # 截断：前或后
     paddings = [pad_idx] * (token_maxlen - len(seq_vec))         	               # 小于向量长度的部分用pad_idx来padding
     return seq_vec + paddings if padding == 'post' else paddings + seq_vec      # PAD: 前或后
 
 
 
-if __name__ == '__main__':
-    # 创建word和char的词汇表，并保存本地
-    
+def example():
+    """创建word和char的词汇表，并保存本地"""
     import pandas as pd
     import pickle
     from config import Config
@@ -254,19 +260,25 @@ if __name__ == '__main__':
     vocab = Vocabulary()
     vocab.add_document(sentences_word, level='word')
     vocab.add_document(sentences_char, level='char')        # word与char-level使用的数据不一样(停用词不一样)，所以分别单独创建
-    vocab.trim(min_count=config.min_count, level='word')    # min_count与训练Embedding时保持一致
-    vocab.trim(min_count=config.min_count, level='char')
+    vocab.trim(min_count=config.MIN_COUNT, level='word')    # min_count与训练Embedding时保持一致
+    vocab.trim(min_count=config.MIN_COUNT, level='char')
     # kept words: 5484 / 11692 =  0.4690
     # kept chars: 1594 / 2048 =  0.7783
     
     # 生成xxx2vector和Embedding Layer初始化权重
     model_word2vec = Word2Vec.load(config.model_word2vec_file)
     model_char2vec = Word2Vec.load(config.model_char2vec_file)
-    vocab.init_vector(model_word2vec, level='word')
-    vocab.init_vector(model_char2vec, level='char')
+    vocab.init_vectors(model_word2vec, level='word')
+    vocab.init_vectors(model_char2vec, level='char')
     vocab.init_embedding_matrix(level='word')
     vocab.init_embedding_matrix(level='char')
     
-    # 保存词汇表
+    # 保存本地
     pickle.dump(vocab, open(config.vocab_file, 'wb'))
+    
+    
+
+if __name__ == '__main__':
+    
+    example()
     

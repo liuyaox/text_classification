@@ -65,9 +65,8 @@ def pretrained_embedding(embedding_file, seps=('\t', ','), header=False):
 
 
 
-if __name__ == '__main__':
-    # 训练Word2Vec向量，保存本地
-    
+def example():
+    """训练Word2Vec向量，并保存本地"""
     import pandas as pd
     from config import Config
     config = Config()
@@ -76,11 +75,17 @@ if __name__ == '__main__':
     sentences_word = data['question_wordseg'].map(lambda x: str(x).strip().split(' '))
     sentences_char = data['question_charseg'].map(lambda x: str(x).strip().split(' '))
     
-    model_word2vec = train_w2v_model(sentences_word, size=config.word_embedding_dim, min_count=config.min_count)
-    model_char2vec = train_w2v_model(sentences_char, size=config.char_embedding_dim, min_count=config.min_count, window=10, iter=15)
-    
+    model_word2vec = train_w2v_model(sentences_word, size=config.WORD_EMBEDDING_DIM, min_count=config.MIN_COUNT)
+    model_char2vec = train_w2v_model(sentences_char, size=config.CHAR_EMBEDDING_DIM, min_count=config.MIN_COUNT, window=10, iter=15)
     print(len(model_word2vec.wv.vocab))     # 5484
     print(len(model_char2vec.wv.vocab))     # 1595
+
     model_word2vec.save(config.model_word2vec_file)
     model_char2vec.save(config.model_char2vec_file)
+    
+    
+
+if __name__ == '__main__':
+    
+    example()
     
