@@ -71,12 +71,12 @@ def example():
     from config import Config
     config = Config()
     
-    data = pd.read_csv(config.training_data_file, sep='\t', encoding='utf8')
+    data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')
     sentences_word = data['question_wordseg'].map(lambda x: str(x).strip().split(' '))
     sentences_char = data['question_charseg'].map(lambda x: str(x).strip().split(' '))
     
-    model_word2vec = train_w2v_model(sentences_word, size=config.WORD_EMBEDDING_DIM, min_count=config.MIN_COUNT)
-    model_char2vec = train_w2v_model(sentences_char, size=config.CHAR_EMBEDDING_DIM, min_count=config.MIN_COUNT, window=10, iter=15)
+    model_word2vec = train_w2v_model(sentences_word, size=config.WORD_EMBED_DIM, min_count=config.MIN_COUNT)
+    model_char2vec = train_w2v_model(sentences_char, size=config.CHAR_EMBED_DIM, min_count=config.MIN_COUNT, window=10, iter=15)
     print(len(model_word2vec.wv.vocab))     # 5484
     print(len(model_char2vec.wv.vocab))     # 1595
 

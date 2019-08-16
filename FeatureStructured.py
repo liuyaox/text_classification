@@ -5,7 +5,6 @@ Author:     liuyao8
 Descritipn: 结构化特征如TFIDF, LSA, LSI, LDA等
 """
 
-import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.pipeline import make_pipeline
@@ -91,15 +90,15 @@ def example_lsa():
     from config import Config
     config = Config()
     
-    data = pd.read_csv(config.training_data_file, sep='\t', encoding='utf8')
+    data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')
     sentences_word, sentences_char = data['question_wordseg'].fillna(''), data['question_charseg'].fillna('')
     
     vocab = pickle.load(open(config.vocab_file, 'rb'))  # 在main中运行的话，必须 from Vocabulary import Vocabulary
     
     word_model_tfidf, word_tfidf, word_model_svd, word_lsa = FeatureStructured.lsa_vectorizer_2steps(
-            sentences_word, vocabulary=vocab.word2idx, n_components=config.svd_n_componets['word'])  # 指定vocabulary，保证全局一致性
+            sentences_word, vocabulary=vocab.word2idx, n_components=config.word_svd_n_componets)  # 指定vocabulary，保证全局一致性
     char_model_tfidf, char_tfidf, char_model_svd, char_lsa = FeatureStructured.lsa_vectorizer_2steps(
-            sentences_char, vocabulary=vocab.char2idx, n_components=config.svd_n_componets['char'])
+            sentences_char, vocabulary=vocab.char2idx, n_components=config.char_svd_n_componets)
     
     pickle.dump((word_model_tfidf, word_tfidf, word_model_svd, word_lsa), open(config.word_tfidf_lsa_file, 'wb'))
     pickle.dump((char_model_tfidf, char_tfidf, char_model_svd, char_lsa), open(config.char_tfidf_lsa_file, 'wb'))

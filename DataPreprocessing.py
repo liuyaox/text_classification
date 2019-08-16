@@ -51,4 +51,4 @@ cols_y = ['system', 'function', 'battery', 'appearance', 'network', 'photo', 'ac
 annotation['labels'] = annotation.apply(lambda se: se[cols_y][se[cols_y]==1].index.tolist(), axis=1)
 annotation['labels'] = annotation['labels'].apply(lambda x: '&&' if len(x) == 0 else '&&'.join(x))
 
-annotation.to_csv(config.training_data_file, sep='\t', index=False, encoding='utf8')
+annotation.to_csv(config.data_file, sep='\t', index=False, encoding='utf8')

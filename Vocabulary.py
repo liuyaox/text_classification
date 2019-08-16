@@ -12,11 +12,12 @@ from tqdm import tqdm
 from gensim.models import Word2Vec
 
 
+# 与config保持一致
 # Default word tokens   # TODO 除这4个外，是否还应该有一些别的，比如空格？见P115
-PAD_TOKEN = 0   # PAD约定取0，不要改变，以下UNK,SOS,EOS可以改变
-UNK_TOKEN = 1   # unknow word   # TODO 原本是没有UNK的？
-SOS_TOKEN = 2   # Start of sentence
-EOS_TOKEN = 3   # End of sentence 
+PAD_IDX = 0   # PAD约定取0，不要改变，以下UNK,SOS,EOS可以改变
+UNK_IDX = 1   # unknow word   # TODO 原本是没有UNK的？
+SOS_IDX = 2   # Start of sentence
+EOS_IDX = 3   # End of sentence 
 
 
 class Vocabulary(object):
@@ -24,34 +25,35 @@ class Vocabulary(object):
     
     def __init__(self):
         # 通用信息
-        self.token2idx_init = {'PAD': PAD_TOKEN, 'UNK': UNK_TOKEN, 'SOS': SOS_TOKEN, 'EOS': EOS_TOKEN}
-        self.idx2token_init = {PAD_TOKEN: 'PAD', UNK_TOKEN: 'UNK', SOS_TOKEN: 'SOS', EOS_TOKEN: 'EOS'}
+        self.token2idx_init = {'PAD': PAD_IDX, 'UNK': UNK_IDX, 'SOS': SOS_IDX, 'EOS': EOS_IDX}
+        self.idx2token_init = {PAD_IDX: 'PAD', UNK_IDX: 'UNK', SOS_IDX: 'SOS', EOS_IDX: 'EOS'}
         
         # Word Level
-        self.word2idx = self.token2idx_init    # TODO 原来是没有{'PAD': PAD_TOKEN, ...}的？
-        self.idx2word = self.idx2token_init    # TODO 只存在于word中么？
+        self.word2idx = self.token2idx_init.copy()    # TODO 原来是没有{'PAD': PAD_IDX, ...}的？
+        self.idx2word = self.idx2token_init.copy()      # TODO 字典一定要用copy！！！否则大家都一起跟着改变
         self.word2count = {}
-        self.num_words = 4
+        self.word_vocab_size = 4
         self.word_trimmed = False       # 是否已过滤低频word
         self.word_stopwords = None      # 低频停用词
         
-        self.word_emb_dim = 0
+        self.word_embed_dim = 0
         self.word2vector = {}
         self.word_idx2vector = {}
-        self.word_emb_matrix = None     # Embedding Layer Weights Matrix
+        self.word_embed_matrix = None     # Embedding Layer Weights Matrix
         
         # Char Level
-        self.char2idx = {}          # TODO self.token2idx_init ???
-        self.idx2char = {}
+        # TODO char中也会出现UNK,SOS,EOS，也要进行PAD(padding为0，这就要求char2idx[0]就得是PAD)，因此char也要处理这4种TOKEN
+        self.char2idx = self.token2idx_init.copy()
+        self.idx2char = self.idx2token_init.copy()
         self.char2count = {}
-        self.num_chars = 0
+        self.char_vocab_size = 4
         self.char_trimmed = False       # 是否已过滤低频char
         self.char_stopwords = None
         
-        self.char_emb_dim = 0
+        self.char_embed_dim = 0
         self.char2vector = {}
         self.char_idx2vector = {}
-        self.char_emb_matrix = None
+        self.char_embed_matrix = None
         
         
     # 1. 创建词汇表
@@ -62,17 +64,17 @@ class Vocabulary(object):
         token = token.strip()
         if level == 'word':
             if token not in self.word2idx:
-                self.word2idx[token] = self.num_words
-                self.idx2word[self.num_words] = token
-                self.num_words += 1
+                self.word2idx[token] = self.word_vocab_size
+                self.idx2word[self.word_vocab_size] = token
+                self.word_vocab_size += 1
                 self.word2count[token] = 1
             else:
                 self.word2count[token] += 1
         else:
             if token not in self.char2idx:
-                self.char2idx[token] = self.num_chars
-                self.idx2char[self.num_chars] = token
-                self.num_chars += 1
+                self.char2idx[token] = self.char_vocab_size
+                self.idx2char[self.char_vocab_size] = token
+                self.char_vocab_size += 1
                 self.char2count[token] = 1
             else:
                 self.char2count[token] += 1
@@ -128,12 +130,12 @@ class Vocabulary(object):
             self.word2count = token2count
             self.word2idx = {word: idx + 4 for (idx, word) in enumerate(token_list)}.update(self.token2idx_init)
             self.idx2word = {idx: word for (word, idx) in self.word2idx.items()}
-            self.num_words = len(self.word2idx)
+            self.word_vocab_size = len(self.word2idx)
         else:
             self.char2count = token2count
-            self.char2idx = {char: idx for (idx, char) in enumerate(token_list)}
+            self.char2idx = {char: idx + 4 for (idx, char) in enumerate(token_list)}.update(self.idx2token_init)
             self.idx2char = {idx: char for (char, idx) in self.char2idx.items()}
-            self.num_chars = len(self.char2idx)
+            self.char_vocab_size = len(self.char2idx)
             
     
     # 2. 低频过滤
@@ -144,13 +146,12 @@ class Vocabulary(object):
             return
         if level == 'word':
             self.word_stopwords = [word for word, cnt in self.word2count.items() if cnt < min_count]
-            
             kept = [word for word, cnt in self.word2count.items() if cnt >= min_count]
             print(f'kept words: {len(kept)} / {len(self.word2idx)} = {len(kept) / len(self.word2idx): .4f}')
-            self.word2idx = self.token2idx_init
-            self.idx2word = self.idx2token_init
+            self.word2idx = self.token2idx_init.copy()
+            self.idx2word = self.idx2token_init.copy()
             self.word2count = {}
-            self.num_words = 4
+            self.word_vocab_size = 4
             for word in kept:
                 self.add_token(word, level='word')
             self.word_trimmed = True
@@ -159,10 +160,10 @@ class Vocabulary(object):
             self.char_stopwords = [char for char, cnt in self.char2count.items() if cnt < min_count]
             kept = [char for char, cnt in self.char2count.items() if cnt >= min_count]
             print(f'kept chars: {len(kept)} / {len(self.char2idx)} = {len(kept) / len(self.char2idx): .4f}')
-            self.char2idx = {}
-            self.idx2char = {}
+            self.char2idx = self.token2idx_init.copy()
+            self.idx2char = self.idx2token_init.copy()
             self.char2count = {}
-            self.num_chars = 0
+            self.char_vocab_size = 4
             for char in kept:
                 self.add_token(char, level='char')
             self.char_trimmed = True
@@ -182,46 +183,46 @@ class Vocabulary(object):
         if isinstance(embedding, Word2Vec):
             embedding = {token: embedding[token] for token in embedding.wv.vocab.keys()}
             
-        emb_dim = len(list(embedding.values())[0])
+        embed_dim = len(list(embedding.values())[0])
         if level == 'word':
-            self.word_emb_dim = emb_dim
+            self.word_embed_dim = embed_dim
             for word, idx in self.word2idx.items():
                 if word in embedding:
                     vector = embedding.get(word)
                 else:
-                    vectors = [embedding.get(x, np.random.uniform(-0.01, 0.01, (emb_dim))) for x in list(word)]
+                    vectors = [embedding.get(x, np.random.uniform(-0.01, 0.01, (embed_dim))) for x in list(word)]
                     vector = reduce(lambda x, y: x + y, vectors) / len(vectors)     # OOV时使用对应的若干字符向量的Average
                 self.word2vector[word] = vector
                 self.word_idx2vector[idx] = vector
         else:
-            self.char_emb_dim = emb_dim
+            self.char_embed_dim = embed_dim
             for char, idx in self.char2idx.items():
-                vector = embedding.get(char, np.random.uniform(-0.01, 0.01, (emb_dim)))
+                vector = embedding.get(char, np.random.uniform(-0.01, 0.01, (embed_dim)))
                 self.char2vector[char] = vector
                 self.char_idx2vector[idx] = vector
 
 
     # 4. 生成Embedding Layer的初始化权重
-    def init_embedding_matrix(self, level='word'):
+    def init_embed_matrix(self, level='word'):
         """基于wordidx2vector或charidx2vector生成用于Embedding Layer的weights matrix
         TODO 总觉得似乎哪里不对？？？<PAD> <UNK>之类的如何处理？
         """
         assert level in ['word', 'char']
         if level == 'word':
             all_embs = np.stack(self.word_idx2vector.values())
-            self.word_emb_matrix = np.random.normal(all_embs.mean(), all_embs.std(), size=(self.num_words, self.word_emb_dim))
+            self.word_embed_matrix = np.random.normal(all_embs.mean(), all_embs.std(), size=(self.word_vocab_size, self.word_embed_dim))
             for idx, vector in tqdm(self.word_idx2vector.items()):
-                self.word_emb_matrix[idx] = vector
+                self.word_embed_matrix[idx] = vector
         else:
             all_embs = np.stack(self.char_idx2vector.values())
-            self.char_emb_matrix = np.random.normal(all_embs.mean(), all_embs.std(), size=(self.num_chars, self.char_emb_dim))
+            self.char_embed_matrix = np.random.normal(all_embs.mean(), all_embs.std(), size=(self.char_vocab_size, self.char_embed_dim))
             for idx, vector in tqdm(self.char_idx2vector.items()):
-                self.char_emb_matrix[idx] = vector
+                self.char_embed_matrix[idx] = vector
 
 
 # 一些与Vocabulary相关的工具
 # TODO classmethod ???
-def seq_to_idxs(seq, token2idx, token_maxlen, unk_idx=UNK_TOKEN, pad_idx=PAD_TOKEN, 
+def seq_to_idxs(seq, token2idx, token_maxlen, unk_idx=UNK_IDX, pad_idx=PAD_IDX, 
                 padding='post', truncating='post', onlyin=None, excluding=[]):
     """
     向量化编码：基于词汇表token2idx，把seq转化为idx向量，词汇表中不存在的token使用unk_idx进行编码，适用于特征编码和Label编码
@@ -252,7 +253,7 @@ def example():
     from config import Config
     config = Config()
     
-    data = pd.read_csv(config.training_data_file, sep='\t', encoding='utf8')
+    data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')
     sentences_word, sentences_char = data['question_wordseg'], data['question_charseg']
     
     # 创建词汇表
@@ -263,15 +264,15 @@ def example():
     vocab.trim(min_count=config.MIN_COUNT, level='word')    # min_count与训练Embedding时保持一致
     vocab.trim(min_count=config.MIN_COUNT, level='char')
     # kept words: 5484 / 11692 =  0.4690
-    # kept chars: 1594 / 2048 =  0.7783
+    # kept chars: 1594 / 2052 =  0.7768
     
     # 生成xxx2vector和Embedding Layer初始化权重
     model_word2vec = Word2Vec.load(config.model_word2vec_file)
     model_char2vec = Word2Vec.load(config.model_char2vec_file)
     vocab.init_vectors(model_word2vec, level='word')
     vocab.init_vectors(model_char2vec, level='char')
-    vocab.init_embedding_matrix(level='word')
-    vocab.init_embedding_matrix(level='char')
+    vocab.init_embed_matrix(level='word')
+    vocab.init_embed_matrix(level='char')
     
     # 保存本地
     pickle.dump(vocab, open(config.vocab_file, 'wb'))

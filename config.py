@@ -12,40 +12,63 @@ class Config(object):
 
     def __init__(self):
 
-        # 一般常量
-        self.MIN_COUNT = 2                  # 训练Embedding，创建Vocabulary时要求的低频下限
-        self.WORD_EMBEDDING_DIM = 100
-        self.CHAR_EMBEDDING_DIM = 100
-        self.PUBLIC_EMBEDDING_DIM = 200     # 公开训练好的Embedding向量维度
-        self.BATCH_SIZE = 64
+        # 任务相关
+        self.task = 'multilabel'
+        self.token_level = 'both'
+        self.structured = False
+        self.N_CLASSES = 11             # 标签/类别数量
         
         
-        # 暂时人为指定，根据实际情况会随时修改
-        self.NUM_CLASSES = 11
+        # Embedding
+        self.MIN_COUNT = 2              # 训练Embedding，创建Vocabulary时要求的低频下限
+        self.PUBLIC_EMBED_DIM = 200     # 公开训练好的Embedding向量维度
+        self.WORD_EMBED_DIM = 100
+        self.CHAR_EMBED_DIM = 100
+        self.model_word2vec_file = './local/model_word2vec.w2v'         # 训练好的Word Embedding  
+        self.model_char2vec_file = './local/model_char2vec.w2v'         # 训练好的Char Embedding
+        
+        
+        # Vocabulary
+        self.PAD_IDX = 0   # PAD约定取0，不要改变，以下UNK,SOS,EOS可以改变
+        self.UNK_IDX = 1   # unknow word   # TODO 原本是没有UNK的？
+        self.SOS_IDX = 2   # Start of sentence
+        self.EOS_IDX = 3   # End of sentence 
+        self.vocab_file = './local/vocab.pkl'       # 词汇表，包含word/char,idx,vector三者之间映射字典，Embedding Layer初始化权重
+        
+        
+        # 结构化特征
+        self.word_svd_n_componets = 100
+        self.char_svd_n_componets = 150
+        self.word_tfidf_lsa_file = './local/word_tfidf_lsa.pkl'
+        self.char_tfidf_lsa_file = './local/char_tfidf_lsa.pkl'
+        
+        
+        # 特征选择
+        self.words_chi2_file = ''       # 基于卡方统计量筛选后的word
+        self.chars_chi2_file = ''       # 基于卡方统计量筛选后的char
+        
+        
+        # 数据预处理和编码
+        self.data_file = './data/sku_qa_data_30000.csv'                # 处理好的标注数据，尚未编码
+        self.data_encoded_file = './local/data_30000_encoded.pkl'     # 向量化编码后的训练数据
         self.WORD_MAXLEN = 100      # 57
         self.CHAR_MAXLEN = 200      # 126
+        
+        
+        # 训练
+        self.BATCH_SIZE = 32
+        self.n_folds = 5
+        self.n_epochs = 10
 
 
-        # 常规文件和路径
+        # 其他文件和路径
         self.annotation_file = './data/商品问答_手机_已标注_30000.xlsx'              # 原始的标注数据
         self.stopwords_files = ['./data/京东商城商品评论-Stopwords.txt', 
                                 './data/京东商城商品评论-Stopwords-other_github.txt']   # 公开停用词
         self.public_stopwords_file = './data/public_stopwords.txt'      # 合并处理好的公开停用词
+        self.config_file = './local/config.pkl'     # 模型创建所需的config
         
-        self.words_chi2_file = ''       # 基于卡方统计量筛选后的word
-        self.chars_chi2_file = ''       # 基于卡方统计量筛选后的char
-        
-        self.training_data_file = './data/sku_qa_training_30000.csv'                # 处理好的标注数据，尚未编码
-        self.training_encoded_file = './data/sku_qa_training_30000_encoded.pkl'     # 向量化编码后的训练数据
-        
-        self.model_word2vec_file = './local/model_word2vec.w2v'         # 训练好的Word Embedding  
-        self.model_char2vec_file = './local/model_char2vec.w2v'         # 训练好的Char Embedding
-        self.vocab_file = './local/vocab.pkl'       # 词汇表，包含word/char,idx,vector三者之间映射字典，Embedding Layer初始化权重
 
-        self.svd_n_componets = {'word': 100, 'char': 150}
-        self.word_tfidf_lsa_file = './local/word_tfidf_lsa.pkl'
-        self.char_tfidf_lsa_file = './local/char_tfidf_lsa.pkl'
-        
 
 
 def get_args():
