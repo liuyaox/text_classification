@@ -198,16 +198,10 @@ class BasicDeepModel(BasicModel):
             self.word_input = Input(shape=(self.word_maxlen, ), dtype='int32', name='word')
             self.word_masking = Masking(mask_value=self.masking_value)
             self.word_embedding = Embedding(self.word_vocab_size, self.word_embed_dim, weights=[self.word_embed_matrix], name='word_embedding')
-            if self.config.structured:
-                # TODO 只支持LSA特征，暂不支持TFIDF特征，因为维度太大！
-                # 放在[]中是方便添加到别的列表中，比如Input列表和Tensor列表
-                self.structured_input = [Input(shape=(self.config.word_svd_n_componets, ), dtype='float32', name='word_structured')]
         elif self.config.token_level == 'char':
             self.char_input = Input(shape=(self.char_maxlen, ), dtype='int32', name='char')
             self.char_masking = Masking(mask_value=self.masking_value)
             self.char_embedding = Embedding(self.char_vocab_size, self.char_embed_dim, weights=[self.char_embed_matrix], name='char_embedding')
-            if self.config.structured:
-                self.structured_input = [Input(shape=(self.config.char_svd_n_componets, ), dtype='float32', name='char_structured')]
         else:
             self.word_input = Input(shape=(self.word_maxlen, ), dtype='int32', name='word')
             self.char_input = Input(shape=(self.char_maxlen, ), dtype='int32', name='char')
@@ -215,12 +209,18 @@ class BasicDeepModel(BasicModel):
             self.char_masking = Masking(mask_value=self.masking_value)
             self.word_embedding = Embedding(self.word_vocab_size, self.word_embed_dim, weights=[self.word_embed_matrix], name='word_embedding')
             self.char_embedding = Embedding(self.char_vocab_size, self.char_embed_dim, weights=[self.char_embed_matrix], name='char_embedding')
-            if self.config.structured:
-                word_structured = Input(shape=(self.config.word_svd_n_componets, ), dtype='float32', name='word_structured')
-                char_structured = Input(shape=(self.config.char_svd_n_componets, ), dtype='float32', name='char_structured')
-                self.structured_input = [word_structured, char_structured]
-                
- 
+        
+        # 结构化特征
+        word_structured = Input(shape=(self.config.word_svd_n_componets, ), dtype='float32', name='word_structured')
+        char_structured = Input(shape=(self.config.char_svd_n_componets, ), dtype='float32', name='char_structured')
+        if self.config.structured == 'word':
+            # TODO 只支持LSA特征，暂不支持TFIDF特征，因为维度太大！   放在[]中是方便添加到别的列表中，比如Input列表和Tensor列表
+            self.structured_input = [word_structured]
+        elif self.config.structured == 'char':
+            self.structured_input = [char_structured]
+        elif self.config.structured == 'both':
+            self.structured_input = [word_structured, char_structured]
+        
         
     def lr_decay_poly(self, epoch, alpha=0.5, beta=12):
         """训练learning rate衰减schedular"""
@@ -287,7 +287,7 @@ class BasicDeepModel(BasicModel):
         print('-----------------------------【' + self.name + '】----------------------------------')
         print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
         self.embedding_trainable(False)
-        print('Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
+        print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
         optimizer = optimizers.Adam(lr=1e-3, clipvalue=2.4)
         self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
         history1 = self.model.fit(x_train,
@@ -297,6 +297,7 @@ class BasicDeepModel(BasicModel):
                                   validation_split=0.3)
         print('-------------Step2: 训练完参数后，解冻Embedding层，再次编译和训练模型-------------')
         self.embedding_trainable(True)
+        print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
         optimizer = optimizers.Adam(lr=1e-3, clipvalue=1.5)
         self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
         #callbacks = [self.lr_schedule, self.checkpoint, ]       # TODO self.checkpoint???
@@ -359,7 +360,8 @@ class BasicDeepModel(BasicModel):
             
             # 取数：X和Y
             x_train_fold, x_val_fold = {}, {}
-            for key in ['char', 'char_left', 'char_right', 'word', 'word_left', 'word_right']:  # 对应model创建时Input的name
+            # TODO 改到__init__里，自动取舍各name！
+            for key in ['word', 'word_left', 'word_right', 'word_structured', 'char', 'char_left', 'char_right', 'char_structured']: # 对应model创建时Input的name
                 x_train_fold[key] = x_train[key][train_index]
                 x_val_fold[key] = x_train[key](val_index)
             y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]

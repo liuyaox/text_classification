@@ -14,8 +14,9 @@ class Config(object):
 
         # 任务相关
         self.task = 'multilabel'
-        self.token_level = 'both'
-        self.structured = False
+        self.token_level = 'both'       # word: word粒度  char: char粒度  both: word+char粒度
+        # TODO structured改成模型定义时参数！z
+        self.structured = 'word'        # word: word粒度  char: char粒度  both: word+char粒度  none: 无  
         self.N_CLASSES = 11             # 标签/类别数量
         
         
