@@ -283,7 +283,7 @@ class BasicDeepModel(BasicModel):
         """
         # 模型训练
         self.mode = 3
-        epochs = epochs if epochs else (3, self.n_epochs)
+        epochs = epochs if epochs else (2, self.n_epochs)
         print('-----------------------------【' + self.name + '】----------------------------------')
         print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
         self.embedding_trainable(False)
@@ -310,10 +310,12 @@ class BasicDeepModel(BasicModel):
         self.plot_history(history2)
         
         # 模型评估
+        test_acc = self.model.evaluate(x_test, y_test)
         test_pred = self.model.predict(x_test, verbose=1)
         scores = self.multilabel_precision_recall(test_pred, y_test)
         vectors, sims = self.multilabel_distribution_similarity(test_pred, y_test)
         print('------------------ Final: Test Metrics: ------------------')
+        print('Test Accuracy: ' + str(round(test_acc, 4)))
         print('Precision: ' + str(scores[0]) + '  Recall: ' + str(scores[1]) + '  F1score: ' + str(scores[2]))
         print('Cosine: ' + str(sims[0]) + '  Entropy: ' + str(sims[1]) + '  Eucliean: ' + str(sims[2]) + '  Manhattan: ' + str(sims[3]))
         pickle.dump(test_pred, open('./result/' + self.name + '_test_pred.pkl', 'wb'))
@@ -346,7 +348,7 @@ class BasicDeepModel(BasicModel):
         self.mode = mode
         checkpoint_path = 'checkpoint-mode' + str(mode) + '/' + self.name + '/'
         os.makedirs(checkpoint_path, exist_ok=True)
-        # 先保存训练前的原始模型(参数和状态处于初始状态)，以便于后续KFold时每次加载的都是原始模型(保证起点一致 line198)，从而可以重新训练
+        # 先保存训练前的原始模型(参数和状态处于初始状态)，以便于后续KFold时每次加载的都是原始模型(line359)，保证起点一致，各Fold之间互不影响
         init_model_file = checkpoint_path + 'init_weight.h5'
         self.model.save_weights(init_model_file)
         

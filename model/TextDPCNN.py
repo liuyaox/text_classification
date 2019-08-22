@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created:    2019-08-18 17:02:53
+Created:    2019-08-19 21:25:09
 Author:     liuyao8
 Descritipn: 
 """
@@ -8,6 +8,7 @@ Descritipn:
 from keras.layers import BatchNormalization, PReLU, Add, MaxPooling1D, Bidirectional, GRU, Dropout, \
                         Concatenate, Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, SpatialDropout1D, Dense
 from keras import regularizers
+from keras import backend as K
 from keras.models import Model
 
 from model.BasicModel import BasicDeepModel
@@ -15,21 +16,37 @@ from model.BasicModel import BasicDeepModel
 
 class TextDPCNN(BasicDeepModel):
     
-    def __init__(self, config=None, rnn_units=30, n_filters=64, filter_size=3, 
-                 max_pool_size=3, max_pool_strides=2, dp=7, dense_units=256, **kwargs):
+    def __init__(self, config=None, rnn_units=30, n_filters=64, filter_size=3, dp=7, dense_units=256, **kwargs):
         self.rnn_units = rnn_units
         self.n_filters = n_filters
         self.filter_size = filter_size
-        self.max_pool_size = max_pool_size
-        self.max_pool_strides = max_pool_strides
         self.dp = dp
         self.dense_units = dense_units
         name = 'TextDPCNN_' + config.token_level
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
         
-    def model_unit(self, inputs, masking, embedding, n_filters=None, filter_size=None, 
-                   max_pool_size=None, max_pool_strides=None, dp=None, dense_units=None):
+    def block(self, X, n_filters, filter_size, kernel_reg, bias_reg, first=False, last=False):
+        """DPCNN网络结构中需要重复的block"""
+        X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)
+        X1 = BatchNormalization()(X1)
+        X1 = PReLU()(X1)
+        X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X1)
+        X1 = BatchNormalization()(X1)
+        X1 = PReLU()(X1)                # (, 57, 64)
+        
+        if first:
+            X = Conv1D(n_filters, kernel_size=1, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)   # (, 57, 64)
+        X = Add()([X, X1])      # (, 57, 64)
+        
+        if last:
+            X = GlobalMaxPooling1D()(X)
+        else:
+            X = MaxPooling1D(pool_size=3, strides=2)(X)     # (, 28, 64)
+        return X
+        
+        
+    def model_unit(self, inputs, masking, embedding, n_filters=None, filter_size=None, dp=None, dense_units=None):
         """模型主体Unit"""
         kernel_reg=regularizers.l2(0.00001)
         bias_reg=regularizers.l2(0.00001)
@@ -37,44 +54,31 @@ class TextDPCNN(BasicDeepModel):
             n_filters = self.n_filters
         if filter_size is None:
             filter_size = self.filter_size
-        if max_pool_size is None:
-            max_pool_size = self.max_pool_size
-        if max_pool_strides is None:
-            max_pool_strides = self.max_pool_strides
         if dp is None:
             dp = self.dp
         if dense_units is None:
             dense_units = self.dense_units
             
+        # Region Embedding
         X = masking(inputs)
         X = embedding(X)
-        X = BatchNormalization()(X)
+        X = BatchNormalization()(X)     # (None, 57, 100)
         
-        X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)
-        X1 = BatchNormalization()(X1)
-        X1 = PReLU()(X1)
-        X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X1)
-        X1 = BatchNormalization()(X1)
-        X1 = PReLU()(X1)
-        X2 = Conv1D(n_filters, kernel_size=1, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)
+        # 第1层 pre-activation
+        X = self.block(X, n_filters, filter_size, kernel_reg, bias_reg, first=True)     # (, 28, 64)
         
-        X = Add()([X1, X2])
-        X = MaxPooling1D(pool_size=max_pool_size, strides=max_pool_strides)(X)
-        
+        # 重复dp次: 不含第1层
+        flag_last = False
         for i in range(dp):
-            X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)
-            X1 = BatchNormalization()(X1)
-            X1 = PReLU()(X1)
-            X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X1)
-            X1 = BatchNormalization()(X1)
-            X1 = PReLU()(X1)
-            
-            X2 = Add()([X1, X])
-            if i + 1 != dp:     # 第dp次时不需要MaxPooling1D，之前每次都需要
-                # TODO 此处报错，因为Negative Dimension，X2的shape不够MaxPool去缩减了
-                X = MaxPooling1D(pool_size=max_pool_size, strides=max_pool_strides)(X2)
-            
-        X = GlobalMaxPooling1D()(X2)
+            if i + 1 == dp or flag_last:        # 最后1层
+                X = self.block(X, n_filters, filter_size, kernel_reg, bias_reg, last=True)
+                break                           # 务必不要忘了break！！！
+            else:                               # 中间层
+                if K.int_shape(X)[1] // 2 < 8:  # 此次block操作后没法继续MaxPooling1D，下一层变为最后1层(GlobalMaxPooling1D)
+                    flag_last = True
+                X = self.block(X, n_filters, filter_size, kernel_reg, bias_reg)
+        
+        # 全连接层
         X = Dense(dense_units)(X)
         X = BatchNormalization()(X)
         X = PReLU()(X)
@@ -94,9 +98,9 @@ class TextDPCNN(BasicDeepModel):
         else:
             # 对word进行特殊处理！
             word_X = self.word_embedding(self.word_input)
-            word_X = SpatialDropout1D()(word_X)
+            word_X = SpatialDropout1D(0.25)(word_X)
             word_X = Bidirectional(GRU(self.rnn_units, return_sequences=True))(word_X)
-            word_X = SpatialDropout1D()(word_X)
+            word_X = SpatialDropout1D(0.25)(word_X)
             word_X = Bidirectional(GRU(self.rnn_units, return_sequences=True))(word_X)
             word_maxpool = GlobalMaxPooling1D()(word_X)
             word_avgpool = GlobalAveragePooling1D()(word_X)
@@ -116,4 +120,4 @@ class TextDPCNN(BasicDeepModel):
         X = Dropout(0.5)(X)
         out = Dense(self.n_classes, activation=self.activation)(X)
         
-        self.model = Model(inputs=inputs, outputs=out)    
+        self.model = Model(inputs=inputs, outputs=out)

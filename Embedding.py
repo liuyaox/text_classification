@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+from model.TextLSTM import TextLSTM# -*- coding: utf-8 -*-
 """
 Created:    2019-08-06 21:24:39
 Author:     liuyao8
@@ -13,7 +13,7 @@ class CorpusGenerator(object):
     """
     使用 gensim 生成 Word2Vec 所需的语料 Generator，由文件直接生成，支持 word-level 和 char-level
     NOTES
-        文件每行必须事先完成分词或分字：每一行是分隔的词或字的字符串，形如：'颜色 很 漂亮' 或 '颜 色 很 漂 亮'
+        文件每行必须事先完成分词或分字：每行是分隔的词或字的字符串，形如：'颜色 很 漂亮' 或 '颜 色 很 漂 亮'
     """
     def __init__(self, corpus_file, stopwords=[], sep=' '):
         self.corpus_file = corpus_file
@@ -34,8 +34,6 @@ def train_w2v_model(sentences, size=100, min_count=3, window=5, sg=1, workers=8,
         其他：与Word2Vec函数参数保持一致，sg=1表示使用skip-gram算法
     RETURN
         model: 训练好的Word2Vec模型，包含(idx, token, vector)三者之间的4种映射字典：idx2token, idx2vector, token2idx, token2vector(即model.wv)
-    USAGE
-        待完善……
     """
     model = Word2Vec(sentences, size=size, min_count=min_count, window=window, sg=sg, workers=workers, iter=iter, compute_loss=compute_loss)
     model.idx2token = {}

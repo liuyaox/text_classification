@@ -30,7 +30,6 @@ class TextCNN(BasicDeepModel):
             fsizes = self.fsizes
         if n_filters is None:
             n_filters = [self.n_filters] * (fsizes[1] - fsizes[0] + 1)
-            
         
         X = masking(inputs)
         X = embedding(X)
