@@ -10,7 +10,6 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.pipeline import make_pipeline
 
 
-
 class FeatureStructured(object):
     
     def __init__(self):
@@ -87,7 +86,7 @@ def example_lsa():
     """生成TFIDF特征、LSA特征"""
     import pandas as pd
     import pickle
-    from config import Config
+    from Config import Config
     config = Config()
     
     data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')

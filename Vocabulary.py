@@ -250,7 +250,7 @@ def example():
     """创建word和char的词汇表，并保存本地"""
     import pandas as pd
     import pickle
-    from config import Config
+    from Config import Config
     config = Config()
     
     data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')

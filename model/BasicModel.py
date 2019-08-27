@@ -21,6 +21,7 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import KFold
 
 from keras.layers import Input, Masking, Embedding
+from keras.models import load_model
 from keras.utils import multi_gpu_model, plot_model
 from keras import optimizers
 from keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -177,7 +178,7 @@ class BasicDeepModel(BasicModel):
         self.checkpoint = None
         
         # Predict相关
-        self.label_binarizer = config.mlb
+        self.label_binarizer = config.label_binarizer
         
         
     def create_model(self, model_summary=True, model_plot=False):
@@ -263,7 +264,7 @@ class BasicDeepModel(BasicModel):
         self.plot_history(history, i_fold)
     
     
-    def embedding_trainable(self, trainable=True):      # TODO 是否能操作self.model，待测试！！！
+    def embedding_trainable(self, trainable=True):
         """是否解冻Embedding Layer"""
         if self.config.token_level == 'both':
             self.model.get_layer('char_embedding').trainable = trainable
@@ -284,7 +285,7 @@ class BasicDeepModel(BasicModel):
         # 模型训练
         self.mode = 3
         epochs = epochs if epochs else (2, self.n_epochs)
-        print('-----------------------------【' + self.name + '】----------------------------------')
+        print('【' + self.name + '】')
         print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
         self.embedding_trainable(False)
         print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
@@ -320,7 +321,7 @@ class BasicDeepModel(BasicModel):
         print('Cosine: ' + str(sims[0]) + '  Entropy: ' + str(sims[1]) + '  Eucliean: ' + str(sims[2]) + '  Manhattan: ' + str(sims[3]))
         pickle.dump(test_pred, open('./result/' + self.name + '_test_pred.pkl', 'wb'))
         
-        return scores, sims, vectors, history1, history2
+        return test_acc, scores, sims, vectors, history1, history2
         
 
     def model_compile_fit(self, data_fold, optimizer='adam', callbacks=None, epochs=None, model_file=None):
@@ -480,3 +481,14 @@ class BasicDeepModel(BasicModel):
         pickle.dump(test_pred, open(result_prefix + self.name + '_test_' + result_postfix, 'wb'))
         
         
+    def load_model(self, model_file):
+        """加载模型及权重"""
+        self.model = load_model(model_file)
+        
+        
+    def load_weights(self, weights_file):
+        """加载模型的权重"""
+        self.model.load_weights(weights_file)
+        
+        
+    

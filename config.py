@@ -60,6 +60,7 @@ class Config(object):
         self.BATCH_SIZE = 32
         self.n_folds = 5
         self.n_epochs = 10
+        self.model_file = './local/model.h5'
 
 
         # 其他文件和路径

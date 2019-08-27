@@ -66,7 +66,7 @@ def pretrained_embedding(embedding_file, seps=('\t', ','), header=False):
 def example():
     """训练Word2Vec向量，并保存本地"""
     import pandas as pd
-    from config import Config
+    from Config import Config
     config = Config()
     
     data = pd.read_csv(config.data_file, sep='\t', encoding='utf8')

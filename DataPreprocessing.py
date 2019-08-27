@@ -13,7 +13,7 @@ import jieba
 import pickle
 from functools import reduce
 
-from config import Config
+from Config import Config
 config = Config()
 
 
