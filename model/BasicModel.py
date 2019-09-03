@@ -222,6 +222,11 @@ class BasicDeepModel(BasicModel):
         elif self.config.structured == 'both':
             self.structured_input = [word_structured, char_structured]
         
+        # Bert编码向量
+        if self.config.bert_flag:
+            self.bert_input = Input(shape=(self.config.bert_maxlen, self.config.bert_dim, ), dtype='float32', name='bert_input')  # 输入是2维！
+            self.bert_masking = Masking(mask_value=self.masking_value)
+        
         
     def lr_decay_poly(self, epoch, alpha=0.5, beta=12):
         """训练learning rate衰减schedular"""

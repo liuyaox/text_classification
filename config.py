@@ -15,8 +15,6 @@ class Config(object):
         # 任务相关
         self.task = 'multilabel'
         self.token_level = 'both'       # word: word粒度  char: char粒度  both: word+char粒度
-        # TODO structured改成模型定义时参数！z
-        self.structured = 'word'        # word: word粒度  char: char粒度  both: word+char粒度  none: 无  
         self.N_CLASSES = 11             # 标签/类别数量
         
         
@@ -38,10 +36,21 @@ class Config(object):
         
         
         # 结构化特征
+        # TODO structured改成模型定义时参数！
+        self.structured = 'word'        # word: word粒度  char: char粒度  both: word+char粒度  none: 无  
         self.word_svd_n_componets = 100
         self.char_svd_n_componets = 150
         self.word_tfidf_lsa_file = './local/word_tfidf_lsa.pkl'
         self.char_tfidf_lsa_file = './local/char_tfidf_lsa.pkl'
+        
+        
+        # Bert相关
+        self.bert_flag = False      # 是否使用Bert模型编码向量
+        self.bert_maxlen = 100
+        self.bert_dim = 768
+        self.bert_model_path = '/home/liuyao58/data/BERT/chinese_L-12_H-768_A-12/'
+        self.bert_graph_tmpfile = './tmp_graph_xxx'
+        self.data_bert_file = './local/bert_data.pkl'
         
         
         # 特征选择

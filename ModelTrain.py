@@ -39,12 +39,22 @@ def get_sides_encoding_func(vocab, config):
     return word_left_encoding, word_right_encoding, char_left_encoding, char_right_encoding
 
 
+def get_bert_model(config):
+    """预训练Bert模型，用于对raw文本编码，raw文本不需分词"""
+    from model.Bert.extract_feature import BertVector
+    bert_model = BertVector(pooling_strategy='NONE', 
+                            max_seq_len=config.bert_maxlen, 
+                            bert_model_path=config.bert_model_path, 
+                            graph_tmpfile=config.bert_graph_tmpfile)
+    return bert_model
+
+
 def data_config_prepare(config):
     """特征编码，Label编码，Train/Test划分，Config生成，持久化"""
     # 0. 数据准备
     data = read_csv(config.data_file, sep='\t', encoding='utf8')
     data['labels'] = data['labels'].map(lambda x: [] if x == '&&' else x.split('&&'))
-    x_word_raw, x_char_raw, y_raw = data['question_wordseg'], data['question_charseg'], data['labels']
+    x_raw, x_word_raw, x_char_raw, y_raw = data['question_raw'], data['question_wordseg'], data['question_charseg'], data['labels']
     
     vocab = pickle.load(open(config.vocab_file, 'rb'))      # 词汇表，映射字典，Embedding Layer初始化权重
     config.CHAR_VOCAB_SIZE = vocab.char_vocab_size
@@ -75,18 +85,26 @@ def data_config_prepare(config):
     word_model_tfidf, x_word_tfidf, word_model_svd, x_word_lsa = pickle.load(open(config.word_tfidf_lsa_file, 'rb'))
     #char_model_tfidf, char_tfidf, char_model_svd, char_lsa = pickle.load(open(config.char_tfidf_lsa_file, 'rb'))
     
+    # Bert模型编码
+    bert_model = get_bert_model(config)
+    bert_vectorizer = lambda x: bert_model.encode([x])["encodes"][0]
+    x_bert = array(x_raw.map(bert_vectorizer).tolist())
+    
     # Label
     mlb = MultiLabelBinarizer()
     y_data = mlb.fit_transform(y_raw)       # TODO 使用训练数据还是所有数据来训练mlb？？？
     config.N_CLASSES = len(mlb.classes_)
     config.label_binarizer = mlb
     
-    # 划分Train/Test
-    x_word_train, x_word_test, x_word_left_train, x_word_left_test, x_word_right_train, x_word_right_test, x_word_lsa_train, x_word_lsa_test, \
+    
+    # 3. 划分并保存Train/Test
+    x_word_train, x_word_test, x_word_left_train, x_word_left_test, x_word_right_train, x_word_right_test, \
     x_char_train, x_char_test, x_char_left_train, x_char_left_test, x_char_right_train, x_char_right_test, \
+    x_word_lsa_train, x_word_lsa_test, x_bert_train, x_bert_test, \
     y_train, y_test = train_test_split(
-            x_word, x_word_left, x_word_right, x_word_lsa,
+            x_word, x_word_left, x_word_right, 
             x_char, x_char_left, x_char_right, 
+            x_word_lsa, x_bert, 
             y_data, test_size=0.3, random_state=2019)
     x_train = {
         'word': x_word_train,
@@ -109,12 +127,8 @@ def data_config_prepare(config):
     
     # 保存编码后数据
     pickle.dump((x_train, y_train, x_test, y_test), open(config.data_encoded_file, 'wb'))
+    pickle.dump((x_bert_train, y_train, x_bert_test, y_test), open(config.data_bert_file, 'wb'))
     pickle.dump(config, open(config.config_file, 'wb'))
-
-
-def bert_prepare():
-    """"""
-    pass
 
 
 def data_augmentation():
