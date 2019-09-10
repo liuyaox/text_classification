@@ -122,10 +122,20 @@ class BasicStatModel(BasicModel):
     
 class BasicDeepModel(BasicModel):
     
-    def __init__(self, config=None, name='BasicDeepModel', model_summary=True, model_plot=False):
+    def __init__(self, config=None, name='BasicDeepModel', model_summary=True, model_plot=False, 
+                 token_level=None, structured=None, bert_flag=None):
         # 基本信息
-        self.name = name
+        if token_level:
+            config.token_level = token_level
+        if structured:
+            config.structured = structured
+        if bert_flag:
+            config.bert_flag = bert_flag
         self.config = config
+        stru_postfix = '_stru-' + config.structured if config.structured != 'none' else ''
+        bert_postfix = '_bert' if config.bert_flag else ''
+        self.name = name + '_level-' + config.token_level + stru_postfix + bert_postfix
+        
         
         # 任务类型决定了类别数量、激活函数和损失函数
         if config.task == 'binary':                     # 单标签二分类
@@ -143,6 +153,7 @@ class BasicDeepModel(BasicModel):
             self.activation = 'sigmoid'
             self.loss = 'binary_crossentropy'
             self.metrics = ['accuracy']
+        
         
         # TODO 能不能删除这些self.xxx，而直接使用self.config.xxx来代替！？
         # word相关
@@ -215,8 +226,8 @@ class BasicDeepModel(BasicModel):
         word_structured = Input(shape=(self.config.word_svd_n_componets, ), dtype='float32', name='word_structured')
         char_structured = Input(shape=(self.config.char_svd_n_componets, ), dtype='float32', name='char_structured')
         if self.config.structured == 'word':
-            # TODO 只支持LSA特征，暂不支持TFIDF特征，因为维度太大！   放在[]中是方便添加到别的列表中，比如Input列表和Tensor列表
-            self.structured_input = [word_structured]
+            # TODO 只支持LSA特征，暂不支持TFIDF特征，因为维度太大
+            self.structured_input = [word_structured]   # 放在[]中是方便添加到别的列表中，比如Input列表和Tensor列表
         elif self.config.structured == 'char':
             self.structured_input = [char_structured]
         elif self.config.structured == 'both':
@@ -224,8 +235,9 @@ class BasicDeepModel(BasicModel):
         
         # Bert编码向量
         if self.config.bert_flag:
-            self.bert_input = Input(shape=(self.config.bert_maxlen, self.config.bert_dim, ), dtype='float32', name='bert_input')  # 输入是2维！
-            self.bert_masking = Masking(mask_value=self.masking_value)
+            self.word_input = Input(shape=(self.config.bert_maxlen, self.config.bert_dim, ), dtype='float32', name='word_bert')  # 输入是2维！
+            self.word_masking = Masking(mask_value=self.masking_value)
+            self.word_embedding = None
         
         
     def lr_decay_poly(self, epoch, alpha=0.5, beta=12):
@@ -273,62 +285,81 @@ class BasicDeepModel(BasicModel):
         """是否解冻Embedding Layer"""
         if self.config.token_level == 'both':
             self.model.get_layer('char_embedding').trainable = trainable
-            self.model.get_layer('word_embedding').trainable = trainable
+            if not self.config.bert_flag:
+                self.model.get_layer('word_embedding').trainable = trainable
         elif self.config.token_level == 'word':
-            self.model.get_layer('word_embedding').trainable = trainable
+            if not self.config.bert_flag:
+                self.model.get_layer('word_embedding').trainable = trainable
         elif self.config.token_level == 'char':
             self.model.get_layer('char_embedding').trainable = trainable
         else:
             exit('Wrong Token Level')
 
 
-    def train_predict(self, x_train, y_train, x_test, y_test, epochs=None):
-        """
-        模型训练和评估
-        x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，表示多输入
-        """
-        # 模型训练
-        self.mode = 3
-        epochs = epochs if epochs else (2, self.n_epochs)
-        print('【' + self.name + '】')
-        print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
-        self.embedding_trainable(False)
-        print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
-        optimizer = optimizers.Adam(lr=1e-3, clipvalue=2.4)
-        self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-        history1 = self.model.fit(x_train,
-                                  y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=epochs[0],
-                                  validation_split=0.3)
-        print('-------------Step2: 训练完参数后，解冻Embedding层，再次编译和训练模型-------------')
-        self.embedding_trainable(True)
-        print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
-        optimizer = optimizers.Adam(lr=1e-3, clipvalue=1.5)
-        self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-        #callbacks = [self.lr_schedule, self.checkpoint, ]       # TODO self.checkpoint???
-        history2 = self.model.fit(x_train,
-                                  y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=epochs[1],
-                                  validation_split=0.3,
-                                  callbacks=None)
-        self.plot_history(history2)
-        
-        # 模型评估
-        test_acc = self.model.evaluate(x_test, y_test)
+    def _evaluate(self, x_test, y_test):
+        """模型评估"""
+        _, test_acc = self.model.evaluate(x_test, y_test)
         test_pred = self.model.predict(x_test, verbose=1)
         scores = self.multilabel_precision_recall(test_pred, y_test)
         vectors, sims = self.multilabel_distribution_similarity(test_pred, y_test)
         print('------------------ Final: Test Metrics: ------------------')
         print('Test Accuracy: ' + str(round(test_acc, 4)))
         print('Precision: ' + str(scores[0]) + '  Recall: ' + str(scores[1]) + '  F1score: ' + str(scores[2]))
-        print('Cosine: ' + str(sims[0]) + '  Entropy: ' + str(sims[1]) + '  Eucliean: ' + str(sims[2]) + '  Manhattan: ' + str(sims[3]))
-        pickle.dump(test_pred, open('./result/' + self.name + '_test_pred.pkl', 'wb'))
-        
-        return test_acc, scores, sims, vectors, history1, history2
-        
+        print('Cosine: ' + str(sims[0]) + '  Entropy: ' + str(sims[1]) + '  Euclidean: ' + str(round(sims[2], 1)) + '  Manhattan: ' + str(sims[3]))
+        return test_acc, scores, sims, vectors, test_pred
 
+
+    def train_evaluate(self, x_train, y_train, x_test, y_test, lr=0.001, epochs=None):
+        """
+        模型训练和评估
+        x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，表示多输入
+        """
+        # 模型训练
+        print('【' + self.name + '】')
+        if self.config.bert_flag:           # 以Bert编码向量作为输入的模型
+            epochs = epochs if epochs else self.n_epochs
+            print('---------------------------------------------------------------------')
+            optimizer = optimizers.Adam(lr=lr)
+            self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
+            history = self.model.fit(x_train,
+                                     y_train, 
+                                     batch_size=self.batch_size*self.config.n_gpus,
+                                     epochs=epochs,
+                                     validation_split=0.3)
+        else:
+            self.mode = 3
+            epochs = epochs if epochs else (2, self.n_epochs)
+            print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
+            self.embedding_trainable(False)
+            print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
+            optimizer = optimizers.Adam(lr=lr, clipvalue=2.4)
+            self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
+            history1 = self.model.fit(x_train,
+                                      y_train, 
+                                      batch_size=self.batch_size*self.config.n_gpus,
+                                      epochs=epochs[0],
+                                      validation_split=0.3)
+            print('-------------Step2: 训练完参数后，解冻Embedding层，再次编译和训练模型-------------')
+            self.embedding_trainable(True)
+            print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
+            optimizer = optimizers.Adam(lr=lr, clipvalue=1.5)
+            self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
+            #callbacks = [self.lr_schedule, self.checkpoint, ]       # TODO self.checkpoint???
+            history2 = self.model.fit(x_train,
+                                      y_train, 
+                                      batch_size=self.batch_size*self.config.n_gpus,
+                                      epochs=epochs[1],
+                                      validation_split=0.3,
+                                      callbacks=None)
+            self.plot_history(history2)
+            history = (history1, history2)
+            
+        # 模型评估
+        test_acc, scores, sims, vectors, test_pred = self._evaluate(x_test, y_test)
+        pickle.dump(test_pred, open('./result/' + self.name + '_test_pred.pkl', 'wb'))
+        return test_acc, scores, sims, vectors, history
+        
+    
     def model_compile_fit(self, data_fold, optimizer='adam', callbacks=None, epochs=None, model_file=None):
         """模型编译和训练Helper Function，支持各种配置"""
         x_train, y_train, x_val, y_val = data_fold
@@ -345,7 +376,7 @@ class BasicDeepModel(BasicModel):
         return history
 
 
-    def train_predict_cv(self, x_train, y_train, x_test, mode=3):
+    def train_evaluate_cv(self, x_train, y_train, x_test, mode=3):
         """
         使用KFold方式训练模型，应用于x_train和x_test
         x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，表示多输入

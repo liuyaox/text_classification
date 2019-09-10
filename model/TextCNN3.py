@@ -8,7 +8,7 @@ Descritipn:
 from keras.layers import BatchNormalization, SpatialDropout1D, Conv1D, GlobalMaxPooling1D, Concatenate, Dropout, Dense
 from keras.models import Model
 
-from model.BasicModel import BasicDeepModel    # TODO model. ???
+from model.BasicModel import BasicDeepModel
 
 
 class TextCNN(BasicDeepModel):
@@ -16,13 +16,13 @@ class TextCNN(BasicDeepModel):
     
     def __init__(self, config=None, fsizes=(2, 5), n_filters=64, dropout_p=0.25, **kwargs):
         self.fsizes = fsizes
-        self.n_filters = n_filters      # TODO 是否是BasicDeepModel通用？通用的话放在BasicDeepModel那里
+        self.n_filters = n_filters
         self.dropout_p = dropout_p
-        name = 'TextCNN_'
+        name = 'TextCNN'
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
 
         
-    def model_unit(self, inputs, masking, embedding, dropout_p=None, fsizes=None, n_filters=None):
+    def model_unit(self, inputs, masking, embedding=None, dropout_p=None, fsizes=None, n_filters=None):
         """模型主体Unit"""
         if dropout_p is None:
             dropout_p = self.dropout_p
@@ -32,12 +32,13 @@ class TextCNN(BasicDeepModel):
             n_filters = [self.n_filters] * (fsizes[1] - fsizes[0] + 1)
         
         X = masking(inputs)
-        X = embedding(X)
+        if embedding:
+            X = embedding(X)
         X = BatchNormalization()(X)
         X = SpatialDropout1D(dropout_p)(X)
         Xs = []
         for i, fsize in enumerate(range(fsizes[0], fsizes[1] + 1)):
-            Xi = Conv1D(n_filters[i], fsize, activation='relu')(X)
+            Xi = Conv1D(n_filters[i], fsize, activation='relu')(X)  # TODO Layer conv1d_5 does not support masking, but was passed an input_mask
             Xi = GlobalMaxPooling1D()(Xi)
             Xs.append(Xi)
         return Xs

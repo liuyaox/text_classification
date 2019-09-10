@@ -8,6 +8,7 @@ Descritipn:
 from numpy import array
 from pandas import read_csv
 import pickle
+from scipy.sparse import csr_matrix
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 
@@ -87,7 +88,7 @@ def data_config_prepare(config):
     
     # Bert模型编码
     bert_model = get_bert_model(config)
-    bert_vectorizer = lambda x: bert_model.encode([x])["encodes"][0]
+    bert_vectorizer = lambda x: csr_matrix(bert_model.encode([x])["encodes"][0])
     x_bert = array(x_raw.map(bert_vectorizer).tolist())
     
     # Label
@@ -97,7 +98,7 @@ def data_config_prepare(config):
     config.label_binarizer = mlb
     
     
-    # 3. 划分并保存Train/Test
+    # 3. 划分并保存Train/Test    
     x_word_train, x_word_test, x_word_left_train, x_word_left_test, x_word_right_train, x_word_right_test, \
     x_char_train, x_char_test, x_char_left_train, x_char_left_test, x_char_right_train, x_char_right_test, \
     x_word_lsa_train, x_word_lsa_test, x_bert_train, x_bert_test, \
@@ -105,7 +106,7 @@ def data_config_prepare(config):
             x_word, x_word_left, x_word_right, 
             x_char, x_char_left, x_char_right, 
             x_word_lsa, x_bert, 
-            y_data, test_size=0.3, random_state=2019)
+            y_data, test_size=0.2, random_state=2019)
     x_train = {
         'word': x_word_train,
         'word_left': x_word_left_train,
@@ -136,25 +137,35 @@ def data_augmentation():
     pass
 
 
-def example():
+def example(bert_flag=False):
     import pickle
     from Vocabulary import Vocabulary
     from Config import Config
     config = Config()
     config.n_gpus = 1
     
+    
     # Data和Config准备
     data_config_prepare(config)
-    x_train, y_train, x_test, y_test = pickle.load(open(config.data_encoded_file, 'rb'))
+    data_file = config.data_bert_file if bert_flag else config.data_encoded_file
+    x_train, y_train, x_test, y_test = pickle.load(open(data_file, 'rb'))
     config = pickle.load(open(config.config_file, 'rb'))
     
-    # 模型训练和评估
-    from model.TextCNN import TextCNN
-    textcnn = TextCNN(config)
-    test_acc, scores, sims, vectors, _, _ = textcnn.train_predict(x_train, y_train, x_test, y_test, epochs=(2, 10))
     
-    # 模型保存
-    textcnn.model.save(config.model_file)
+    # 模型训练 评估 保存
+    if not bert_flag:   # 一般模型
+        from model.TextCNN import TextCNN
+        textcnn = TextCNN(config)
+        test_acc, scores, sims, vectors, _, _ = textcnn.train_predict(x_train, y_train, x_test, y_test, epochs=(2, 10))
+        textcnn.model.save(config.model_file)
+    
+    else:               # Bert模型
+        x_train = array([term.toarray() for term in x_train])
+        x_test = array([term.toarray() for term in x_test])
+        from model.TextBertGRU import TextBertGRU
+        textbertgru = TextBertGRU(config)
+        test_acc, scores, sims, vectors, history = textbertgru.train_evaluate(x_train, y_train, x_test, y_test)
+    
     
 
 if __name__ == '__main__':
