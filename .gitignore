@@ -1,8 +1,11 @@
 # Liuyaox
 data/
 doc/
+!doc/try.txt
 local/
 aspect_extraction.py
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
