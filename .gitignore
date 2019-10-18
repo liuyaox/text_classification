@@ -1,7 +1,6 @@
 # Liuyaox
 data/
 doc/
-!doc/try.txt
 local/
 aspect_extraction.py
 
@@ -111,3 +110,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+
+!doc/try.txt
