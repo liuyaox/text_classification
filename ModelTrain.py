@@ -76,11 +76,12 @@ def data_config_prepare(config):
     config.WORD_MAXLEN = int(1.5 * x_word_raw.map(lambda x: len(str(x).split())).max())     # 57
     config.CHAR_MAXLEN = int(1.5 * x_char_raw.map(lambda x: len(str(x).split())).max())     # 126
     config.SENT_MAXLEN = int(1.5 * x_sent_raw2.map(lambda x: len(str(x).split('&'))).max()) # 18
+    config.SENT_MAXLEN = 5
     
     # 1. Token筛选
     
     
-    # 2. 特征和Label向量化编码
+    # 2. 特征和Label向量化编码  以下特征中不需要的特征可直接删除，如left和right特征、Bert编码特征、Sentence特征等
     # word和char特征
     word_encoding, char_encoding = get_encoding_func(vocab, config)
     x_word = array(x_word_raw.map(word_encoding).tolist(), dtype='int32')
@@ -130,7 +131,7 @@ def data_config_prepare(config):
             x_word, x_word_left, x_word_right, 
             x_char, x_char_left, x_char_right, 
             x_word_lsa, 
-            x_bert,                 # bert编码特征计算太慢的话，可删除该行，不使用bert编码特征
+            x_bert,                 # bert编码特征计算太慢，可删除该行，不使用bert编码特征
             x_sent1, x_sent2,
             y_data, 
             test_size=0.2, random_state=2019
@@ -170,11 +171,9 @@ def data_augmentation():
 
 
 def example(bert_flag=False):
-    import pickle
     from Vocabulary import Vocabulary
     from Config import Config
     config = Config()
-    config.n_gpus = 1
     
     
     # Data和Config准备
@@ -182,6 +181,13 @@ def example(bert_flag=False):
     config = pickle.load(open(config.config_file, 'rb'))
     data_file = config.data_bert_file if bert_flag else config.data_encoded_file
     x_train, y_train, x_test, y_test = pickle.load(open(data_file, 'rb'))
+    
+    
+    # 根据实际情况修改，也可直接在Config.py里修改，推荐前者
+    config.n_gpus = 1
+    config.token_level = 'word'
+    config.structured = 'none'
+    config.bert_flag = False
     
     
     # 模型训练 评估 保存
@@ -192,6 +198,7 @@ def example(bert_flag=False):
         textcnn.model.save(config.model_file)
     
     else:               # Bert模型
+        config.bert_flag = True
         x_train = array([term.toarray() for term in x_train], dtype='int32')
         x_test = array([term.toarray() for term in x_test], dtype='int32')
         from model.TextBertGRU import TextBertGRU

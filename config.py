@@ -45,6 +45,7 @@ class Config(object):
         
         
         # Bert相关
+        self.bert_flag = False
         self.bert_maxlen = 100
         self.bert_dim = 768
         self.bert_model_path = '/home/liuyao58/data/BERT/chinese_L-12_H-768_A-12/'
@@ -66,6 +67,7 @@ class Config(object):
         
         
         # 训练
+        self.n_gpus = 1
         self.BATCH_SIZE = 32
         self.n_folds = 5
         self.n_epochs = 10
