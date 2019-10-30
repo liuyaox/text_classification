@@ -11,14 +11,15 @@ from keras.models import Model
 from model.BasicModel import BasicDeepModel
 
 
-class TextCNN(BasicDeepModel):
-    """TextCNN模型，支持char,word和both. both时char和word分别进行TextCNN，然后拼接结果"""
+class TextBertCNN(BasicDeepModel):
+    """TextCNN模型，修改自TextCNN.py，支持Bert编码向量的输入，没有embedding"""
     
     def __init__(self, config=None, fsizes=(2, 5), n_filters=64, dropout_p=0.25, **kwargs):
         self.fsizes = fsizes
         self.n_filters = n_filters
         self.dropout_p = dropout_p
-        name = 'TextCNN'
+        name = 'TextBertCNN'
+        config.bert_flag = True
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
 
         
@@ -32,7 +33,7 @@ class TextCNN(BasicDeepModel):
             n_filters = [self.n_filters] * (fsizes[1] - fsizes[0] + 1)
         
         X = masking(inputs)
-        if embedding:
+        if embedding:               # TODO 为了支持embedding为None的Bert编码向量，暂时还有问题line41
             X = embedding(X)
         X = BatchNormalization()(X)
         X = SpatialDropout1D(dropout_p)(X)

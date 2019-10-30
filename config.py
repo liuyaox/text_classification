@@ -14,7 +14,7 @@ class Config(object):
 
         # 任务相关
         self.task = 'multilabel'
-        self.token_level = 'both'       # word: word粒度  char: char粒度  both: word+char粒度
+        self.token_level = 'word'       # word: word粒度  char: char粒度  both: word+char粒度
         self.N_CLASSES = 11             # 标签/类别数量
         
         
@@ -58,10 +58,11 @@ class Config(object):
         
         
         # 数据预处理和编码
-        self.data_file = './data/sku_qa_data_30000.csv'                # 处理好的标注数据，尚未编码
+        self.data_file = './data/sku_qa_data_30000.csv'               # 处理好的标注数据，尚未编码
         self.data_encoded_file = './local/data_30000_encoded.pkl'     # 向量化编码后的训练数据
         self.WORD_MAXLEN = 100      # 57
         self.CHAR_MAXLEN = 200      # 126
+        self.SENT_MAXLEN = 50       # 18
         
         
         # 训练
@@ -72,12 +73,11 @@ class Config(object):
 
 
         # 其他文件和路径
-        self.annotation_file = './data/商品问答_手机_已标注_30000.xlsx'              # 原始的标注数据
+        self.annotation_file = './data/商品问答_手机_已标注_30000.xlsx'                # 原始的标注数据
         self.stopwords_files = ['./data/京东商城商品评论-Stopwords.txt', 
-                                './data/京东商城商品评论-Stopwords-other_github.txt']   # 公开停用词
-        self.public_stopwords_file = './data/public_stopwords.txt'      # 合并处理好的公开停用词
-        self.config_file = './local/config.pkl'     # 模型创建所需的config
-        
+                                './data/京东商城商品评论-Stopwords-other_github.txt']  # 公开停用词
+        self.cleaned_all_stopwords_file = './data/cleaned_all_stopwords.txt'          # 合并处理好的公开停用词
+        self.config_file = './local/config.pkl'     # config文件
 
 
 

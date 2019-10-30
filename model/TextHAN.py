@@ -5,46 +5,87 @@ Author:     liuyao8
 Descritipn: 
 """
 
-from keras.layers import Input, BatchNormalization, Bidirectional, LSTM, TimeDistributed, Dropout, Concatenate, Dense
+from keras.layers import Input, BatchNormalization, Bidirectional, LSTM, TimeDistributed, Dropout, Dense, GRU, Masking, Flatten
 from keras.models import Model
 
 from model.BasicModel import BasicDeepModel
-from model.Layers import Attention
+from model.Layers import Attention, AttentionSelf
 
 
 class TextHAN(BasicDeepModel):
     
-    def __init__(self, config=None, rnn_units=128, **kwargs):
-        self.rnn_units = rnn_units
-        self.sent_maxlen = 30
+    def __init__(self, config=None, rnn_units1=128, rnn_units2=128, **kwargs):
+        self.rnn_units1 = rnn_units1
+        self.rnn_units2 = rnn_units2
+        self.sent_maxlen = config.SENT_MAXLEN
         self.word_maxlen = config.WORD_MAXLEN
+        self.sent_input = Input(shape=(self.sent_maxlen, self.word_maxlen), dtype='int32', name='sentence1')  # (None, sent_maxlen, word_maxlen)
         name = 'TextHAN'
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
-        
+    
+    # 方法1：以下参考https://github.com/ShawnyXiao/TextClassification-Keras/blob/master/model/HAN/han.py
+    # 脚本https://github.com/AlexYangLi/TextClassification/blob/master/models/keras_han_model.py与方法1其实是一样的，只是写法不同
+    # 脚本https://github.com/richliao/textClassifier/blob/master/textClassifierHATT.py与方法1是一样的
     def build_model(self):
-        # Word Part
-        word_X = self.word_masking(self.word_input)
-        word_X = self.word_embedding(word_X)
-        word_X = BatchNormalization()(word_X)
-        word_X = Bidirectional(LSTM(self.rnn_units, return_sequences=True))(word_X)
-        word_out = Attention(self.word_maxlen)(word_X)                      # TODO 能不能使用AttentionAverageWeighted
-        model_word = Model(inputs=self.word_input, outputs=word_out)
-        
-        # Sentence Part
-        inputs = Input(shape=(self.sent_maxlen, self.word_maxlen), name='sentence') # TODO 长啥样的！？
-        X = TimeDistributed(model_word)(inputs)
+        # Sentence Part                                           sent_input: (None, sent_maxlen, word_maxlen)
+        X = TimeDistributed(self.word_encoder())(self.sent_input)           # (None, sent_maxlen, 2*rnn_units1)
+        # X = Masking()(X)  # 需不需要？？？
         X = BatchNormalization()(X)
-        X = Bidirectional(LSTM(self.rnn_units, return_sequences=True))(X)
-        X = Attention(self.sent_maxlen)(X)
+        X = Bidirectional(LSTM(self.rnn_units2, return_sequences=True))(X)  # (None, sent_maxlen, 2*rnn_units2)
+        X = Attention(self.sent_maxlen)(X)                                  # (None, 2*rnn_units2)
         
-        # 结构化特征
-        if self.config.structured in ['word', 'char', 'both']:
-            X = Concatenate()([X] + self.structured_input)
-            inputs = [inputs, self.structured_input]
-        
-        # 模型结尾
         X = Dropout(0.5)(X)
-        out = Dense(self.n_classes, activation=self.activation)(X)
+        # X = Dense(256, activation='relu')(X)  # 需不需要？？？
+        out = Dense(self.n_classes, activation=self.activation)(X)          # (None, n_classes)
+        self.model = Model(inputs=self.sent_input, outputs=out)  # TODO 注意inputs是Sentence Part处的inputs(而非Word Part处的word_input)！
+
+
+    def word_encoder(self):
+        # Word Part 模型，提供word level的编码功能
+        word_X = self.word_masking(self.word_input)                 # (None, word_maxlen)
+        word_X = self.word_embedding(word_X)                        # (None, word_maxlen, word_embed_dim)
+        word_X = BatchNormalization()(word_X)
+        word_X = Bidirectional(LSTM(self.rnn_units1, return_sequences=True))(word_X) # (None, word_maxlen, 2*rnn_units1)
+        word_out = Attention(self.word_maxlen)(word_X)              # (None, 2*rnn_units1)  # TODO 能不能使用AttentionAverageWeighted
+        return Model(inputs=self.word_input, outputs=word_out)
+
+
+    def han_data1(self, x_train, y_train, x_test, y_test):
+        """脚本参考同build_model1"""
+        # TODO 如何确定句子之间的分界！？之前的处理都不在意句子间的分界，把所有句子当成一个句子来处理。
+        # TODO 以下做法似有不妥？
+        # 1.强行在document(所有句子)后面padding一次，而不是在每个句子后面都padding一次 ？？？
+        # -----------,------,--- ------------,-------- --,000000000000000000 00000000000000000000
+        # 2.强行把document按sent_maxlen(假设为20)划分看，而非原本句子的自然划分 ？？？
+        # -----------,------,---|------------,--------|--,000000000000000000|00000000000000000000
+        # 1和2应该如下所示：  吧？？？
+        # ----------- 000000 000|------000000 00000000|-- -------------00000|----------0000000000
+        from keras.preprocessing.sequence import pad_sequences
+        x_train = pad_sequences(x_train, maxlen=self.sent_maxlen * self.word_maxlen)    # 1
+        x_test = pad_sequences(x_test, maxlen=self.sent_maxlen * self.word_maxlen)
+        x_train = x_train.reshape((len(x_train), self.sent_maxlen, self.word_maxlen))   # 2
+        x_test = x_test.reshape((len(x_test), self.sent_maxlen, self.word_maxlen))
+        return x_train, x_test
+    
+    
+    
+    # 方法2：以下参考https://github.com/yongzhuo/Keras-TextClassification/blob/master/keras_textclassification/m12_HAN/graph.py
+    # 方法1使用了Attention机制，而方法2使用了Self-Attention即Transformer机制！
+    # TODO 输入是self.word_embedding.input？？？待研究！
+    def build_model2(self):
+        # Word Part
+        word_X = self.word_embedding.output                         # (None, word_maxlen, word_embed_dim)
+        word_X = Bidirectional(GRU(units=self.rnn_units1, return_sequences=True, activation='relu'))(word_X) # (None, word_maxlen, 2*rnn_units1)
+        word_X = AttentionSelf(self.rnn_units*2)(word_X)            # (None, word_maxlen, 2*rnn_units)
+        word_X = Dropout(0.5)(word_X)
+
+        # Sentence Part
+        X = Bidirectional(GRU(units=self.rnn_units2, return_sequences=True, activation='relu'))(word_X)      # (None, word_maxlen, 2*rnn_units2)
+        X = AttentionSelf(self.word_embed_dim)(X)                   # (None, word_maxlen, word_embed_dim)
+        X = Dropout(0.5)(X)
+
+        X = Flatten()(X)                                            # (None, word_maxlen * word_embed_dim)
+        out = Dense(self.n_classes, activation=self.activation)(X)  # (None, n_classes)
+        self.model = Model(inputs=self.word_embedding.input, outputs=out)
         
-        self.model = Model(inputs=inputs, outputs=out)

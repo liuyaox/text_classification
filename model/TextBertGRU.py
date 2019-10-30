@@ -18,20 +18,19 @@ class TextBertGRU(BasicDeepModel):
     Bert向量简单应用
     Bert(Tensorflow实现)预训练模型对原始文本进行向量化编码，输入至RNN模型(Keras实现)里微调
     注意，Bert不参与模型搭建，更不参与训练！相当于提前训练好的Word Embedding那样使用
-    TODO 设计成数据编码环节，可通用于其他所有模型！
     """
     
     def __init__(self, config=None, rnn_units=128, dense_units=128, **kwargs):
         self.rnn_units = rnn_units
         self.dense_units = dense_units
         name = 'TextBertGRU'
-        config.bert_flag = True
+        config.bert_flag = True     # 唯一与BERT关联的地方
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
 
 
     def build_model(self):
         """模型结构与BERT没任何关系，只不过其输入是BERT编码的向量"""
-        X = self.word_masking(self.word_input)     # TODO 务必要有masking，否则loss和val_acc几乎一直不保持不变！
+        X = self.word_masking(self.word_input)              # TODO 务必要有masking，否则loss和val_acc几乎一直不保持不变！
         X = GRU(self.rnn_units, dropout=0.25, recurrent_dropout=0.25)(X)
         X = Dense(self.dense_units, activation='relu')(X)
         X = BatchNormalization()(X)
@@ -41,7 +40,9 @@ class TextBertGRU(BasicDeepModel):
     
     
     
-    # TODO 以下待办
+    
+    
+    # TODO 以下待办    设计成数据编码环节，可通用于其他所有模型！
     def build_bert_model(self):
         self.bert_model = BertVector(pooling_strategy='NONE',
                                      max_seq_len=self.config.bert_maxlen, 
