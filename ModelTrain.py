@@ -50,9 +50,16 @@ def get_bert_model(config):
     return bert_model
 
 
-def sent_array(x_sent_raw, config, sent_encoding):
-    """向量化编码：Sentence粒度, for TextHAN  参考：https://github.com/richliao/textClassifier/blob/master/textClassifierHATT.py"""
+def sent_array(x_sent_raw, config, word_encoding):
+    """
+    向量化编码：Sentence粒度, for TextHAN  
+    编码后document形如下行：其中--表示sentence，|表示其向量结束，WORD_MAXLEN=10, SENT_MAXLEN=6, 编码前是4个sentence
+    --------00|------0000|----------|-------000|0000000000|0000000000
+    参考：https://github.com/richliao/textClassifier/blob/master/textClassifierHATT.py
+    """
     x_sent = zeros((len(x_sent_raw), config.SENT_MAXLEN, config.WORD_MAXLEN), dtype='int32')  # Sentence特征是3维，其他特征是2维
+    # sent_encoding只进行各个句子内的Word Level编码，编码后结果形如：--------00|------0000|----------|-------000
+    sent_encoding = lambda x: array([word_encoding(sent) for sent in str(x).split('&')[: config.SENT_MAXLEN]], dtype='int32') # 截断
     for i, sents in enumerate(x_sent_raw):
         sents_vector = sent_encoding(sents)
         j, k = sents_vector.shape
@@ -109,9 +116,8 @@ def data_config_prepare(config):
     
     
     # Sentence特征  only for TextHAN
-    sent_encoding = lambda x: array([word_encoding(sent) for sent in str(x).split('&')][:config.SENT_MAXLEN], dtype='int32') # 截断
-    x_sent1 = sent_array(x_sent_raw1, config, sent_encoding)
-    x_sent2 = sent_array(x_sent_raw2, config, sent_encoding)
+    x_sent1 = sent_array(x_sent_raw1, config, word_encoding)
+    x_sent2 = sent_array(x_sent_raw2, config, word_encoding)
     
     
     # Label

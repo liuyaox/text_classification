@@ -23,7 +23,7 @@ from sklearn.model_selection import KFold
 from keras.layers import Input, Masking, Embedding
 from keras.models import load_model
 from keras.utils import multi_gpu_model, plot_model
-from keras import optimizers
+from keras.optimizers import Adam, SGD
 from keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 
 
@@ -309,20 +309,19 @@ class BasicDeepModel(BasicModel):
         return test_acc, scores, sims, vectors, test_pred
 
 
-    def train_evaluate(self, x_train, y_train, x_test, y_test, lr=0.001, epochs=None):
+    def train_evaluate(self, x_train, y_train, x_test, y_test, lr=1e-3, epochs=None):
         """
         模型训练和评估
-        x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，表示多输入
+        x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，能够支持多输入
         """
         # 模型训练
         print('【' + self.name + '】')
         if self.config.bert_flag:           # 以Bert编码向量作为输入的模型
             epochs = epochs if epochs else self.n_epochs
             print('---------------------------------------------------------------------')
-            optimizer = optimizers.Adam(lr=lr)
+            optimizer = Adam(lr=lr)
             self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-            history = self.model.fit(x_train,
-                                     y_train, 
+            history = self.model.fit(x_train, y_train, 
                                      batch_size=self.batch_size*self.config.n_gpus,
                                      epochs=epochs,
                                      validation_split=0.3)
@@ -332,21 +331,19 @@ class BasicDeepModel(BasicModel):
             print('-------------------Step1: 前期冻结Embedding层，编译和训练模型-------------------')
             self.embedding_trainable(False)
             print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
-            optimizer = optimizers.Adam(lr=lr, clipvalue=2.4)
+            optimizer = Adam(lr=lr, clipvalue=2.4)       # clipvalue不应该写死，或者使用默认值！下同
             self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-            history1 = self.model.fit(x_train,
-                                      y_train, 
+            history1 = self.model.fit(x_train, y_train, 
                                       batch_size=self.batch_size*self.config.n_gpus,
                                       epochs=epochs[0],
                                       validation_split=0.3)
             print('-------------Step2: 训练完参数后，解冻Embedding层，再次编译和训练模型-------------')
             self.embedding_trainable(True)
             print('Embedding Trainable: ' + str(self.model.get_layer('word_embedding').trainable))
-            optimizer = optimizers.Adam(lr=lr, clipvalue=1.5)
+            optimizer = Adam(lr=lr, clipvalue=1.5)
             self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
             #callbacks = [self.lr_schedule, self.checkpoint, ]       # TODO self.checkpoint???
-            history2 = self.model.fit(x_train,
-                                      y_train, 
+            history2 = self.model.fit(x_train, y_train, 
                                       batch_size=self.batch_size*self.config.n_gpus,
                                       epochs=epochs[1],
                                       validation_split=0.3,
@@ -365,8 +362,7 @@ class BasicDeepModel(BasicModel):
         x_train, y_train, x_val, y_val = data_fold
         epochs = epochs if epochs else self.n_epochs
         self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)   # TODO 多标签时accuracy含义是什么？
-        history = self.model.fit(x_train,
-                                 y_train, 
+        history = self.model.fit(x_train, y_train, 
                                  batch_size=self.batch_size*self.config.n_gpus,
                                  epochs=epochs,
                                  validation_data=(x_val, y_val),
@@ -424,14 +420,14 @@ class BasicDeepModel(BasicModel):
             if mode == 1:
                 # 一直冻结Embedding，使用snapshot方式训练模型
                 self.embedding_trainable(False)
-                optimizer = optimizers.Adam(lr=1e-3, clipvalue=2.0)
+                optimizer = Adam(lr=1e-3, clipvalue=2.0)
                 callbacks = [snapshot, ]
                 history = self.model_compile_fit(data_fold, optimizer, callbacks, epochs=self.snap_epoch, model_file=None)
                 
             elif mode == 2:
                 # 前期冻结Embedding层，模型编译和训练
                 self.embedding_trainable(False)
-                optimizer = optimizers.Adam(lr=1e-3, clipvalue=2.0)
+                optimizer = Adam(lr=1e-3, clipvalue=2.0)
                 history1 = self.model_compile_fit(data_fold, optimizer, epochs=6)
                 # 训练好参数后，解冻Embedding层，再次编译，使用snapshot方式训练模型
                 self.embedding_trainable(True)
@@ -442,11 +438,11 @@ class BasicDeepModel(BasicModel):
             elif mode == 3:
                 # 前期冻结Embedding层，模型编译和训练
                 self.embedding_trainable(False)
-                optimizer = optimizers.Adam(lr=1e-3, clipvalue=2.4)
+                optimizer = Adam(lr=1e-3, clipvalue=2.4)
                 history1 = self.model_compile_fit(data_fold, optimizer, epochs=2, model_file=None)
                 # 训练好参数后，解冻Embedding层，再次编译，训练模型
                 self.embedding_trainable(True)
-                optimizer = optimizers.Adam(lr=1e-3, clipvalue=1.5)
+                optimizer = Adam(lr=1e-3, clipvalue=1.5)
                 callbacks = [self.lr_schedule, checkpoint, ]
                 history2 = self.model_compile_fit(data_fold, optimizer, callbacks, epochs=10, model_file=None)
                 self.plot_histories(history1, history2, i_fold)
@@ -455,14 +451,14 @@ class BasicDeepModel(BasicModel):
                 # 一直解冻Embedding层，编译和训练模型
                 if self.config.n_gpus == 1:             # TODO 为什么gpu=1时为True，=2时呢？为False??? 注意，默认为True
                     self.embedding_trainable(True)
-                optimizer = optimizers.SGD(lr=self.init_lr, momentum=0.9, decay=1e-6)
+                optimizer = SGD(lr=self.init_lr, momentum=0.9, decay=1e-6)
                 callbacks = [LearningRateScheduler(self.poly_decay), self.early_stopping, ]
                 history = self.model_compile_fit(data_fold, optimizer, callbacks, model_file=model_file)
                 self.plot_history(history, i_fold)
                 
             elif mode == 5:
                 # 一直解冻Embedding层，编译和训练模型
-                optimizer = optimizers.Adam(lr=1e-3, clipnorm=1.0)
+                optimizer = Adam(lr=1e-3, clipnorm=1.0)
                 callbacks = [self.lr_schedule, checkpoint, ]
                 history = self.model_compile_fit(data_fold, optimizer, callbacks, epochs=20, model_file=None)
                 self.plot_history(history, i_fold)
@@ -471,7 +467,7 @@ class BasicDeepModel(BasicModel):
                 # 一直解冻Embedding层，编译，使用snapshot方式训练模型
                 if self.config.n_gpus == 1:
                     self.embedding_trainable(True)
-                optimizer = optimizers.Adam(lr=self.init_lr, decay=1e-6)
+                optimizer = Adam(lr=self.init_lr, decay=1e-6)
                 callbacks = [snapshot, ]
                 history = self.model_compile_fit(data_fold, optimizer, callbacks, model_file=None)
                 self.plot_history(history, i_fold)

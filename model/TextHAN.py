@@ -7,7 +7,7 @@ Descritipn:
 
 from keras.layers import Input, BatchNormalization, Bidirectional, LSTM, TimeDistributed, Dropout, Dense, GRU, Masking, Flatten
 from keras.models import Model
-from keras import optimizers
+from keras.optimizers import Adam
 
 from model.BasicModel import BasicDeepModel
 from model.Layers import Attention, AttentionSelf
@@ -31,13 +31,13 @@ class TextHAN(BasicDeepModel):
     def build_model(self):
         # Sentence Part                                                       sent_input: (None, sent_maxlen, word_maxlen)
         X = TimeDistributed(self.word_encoder(), name='word_encoder')(self.sent_input)  # (None, sent_maxlen, 2*rnn_units1)
-        # X = Masking()(X)  # 需不需要？？？
+        X = Masking()(X)  # TODO 实验验证，加不加，影响不大。为什么？何时需要？
         X = BatchNormalization()(X)
         X = Bidirectional(LSTM(self.rnn_units2, return_sequences=True))(X)  # (None, sent_maxlen, 2*rnn_units2)
         X = Attention(self.sent_maxlen)(X)                                  # (None, 2*rnn_units2)
         
         X = Dropout(0.5)(X)
-        # X = Dense(256, activation='relu')(X)  # 需不需要？？？
+        # X = Dense(64, activation='relu')(X)  # 实验验证，加不加，影响不大
         out = Dense(self.n_classes, activation=self.activation)(X)          # (None, n_classes)
         self.model = Model(inputs=self.sent_input, outputs=out)  # TODO 注意inputs是Sentence Part处的inputs(而非Word Part处的word_input)！
 
@@ -52,60 +52,50 @@ class TextHAN(BasicDeepModel):
         return Model(inputs=self.word_input, outputs=word_out)
 
 
-    def train_evaluate(self, x_train, y_train, x_test, y_test, lr=0.001, epochs=None):
-        """
-        模型训练和评估 only for TextHAN
-        x_train/x_test是字典(key=Input创建时的name, value=Input对应的数据)，表示多输入
-        """
+    def train_evaluate(self, x_train, y_train, x_test, y_test, lr=1e-4, epochs=None):
+        """经测试，only Step1, only Step2, Step1+Step2, 这3种训练模式效果差不多，only Step2略微好一丁点"""
         # 模型训练
         print('【' + self.name + '】')
         self.mode = 3
         epochs = epochs if epochs else (2, self.n_epochs)
+        
         print('-------------------Step1: 前期冻结Word_Encoder层，编译和训练模型-------------------')
-        self.model.get_layer('word_encoder').trainable = False        # TODO word_encoder由很多层组成，如何只设置其中的Embedding？？
-        optimizer = optimizers.Adam(lr=lr, clipvalue=2.4)
-        self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-        history1 = self.model.fit(x_train,
-                                  y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=epochs[0],
-                                  validation_split=0.3)
+        self.model.get_layer('word_encoder').trainable = False      # TODO word_encoder由很多层组成，如何只设置其中的Embedding？？
+        history1 = None         # 编译和训练过程同Step2
+        
         print('-------------Step2: 训练完参数后，解冻Word_Encoder层，再次编译和训练模型-------------')
         self.model.get_layer('word_encoder').trainable = True
-        optimizer = optimizers.Adam(lr=lr, clipvalue=1.5)
-        self.model.compile(loss=self.loss, optimizer=optimizer, metrics=self.metrics)
-        history2 = self.model.fit(x_train,
-                                  y_train, 
+        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-4), metrics=self.metrics)
+        history2 = self.model.fit(x_train, y_train, 
                                   batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=epochs[1],
+                                  epochs=3,
+                                  validation_split=0.3,
+                                  callbacks=None)
+        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-5), metrics=self.metrics)
+        history2 = self.model.fit(x_train, y_train, 
+                                  batch_size=self.batch_size*self.config.n_gpus,
+                                  epochs=3,
+                                  validation_split=0.3,
+                                  callbacks=None)
+        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-6), metrics=self.metrics)
+        history2 = self.model.fit(x_train, y_train, 
+                                  batch_size=self.batch_size*self.config.n_gpus,
+                                  epochs=3,
+                                  validation_split=0.3,
+                                  callbacks=None)
+        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-7), metrics=self.metrics)
+        history2 = self.model.fit(x_train, y_train, 
+                                  batch_size=self.batch_size*self.config.n_gpus,
+                                  epochs=3,
                                   validation_split=0.3,
                                   callbacks=None)
         self.plot_history(history2)
         history = (history1, history2)
-            
+        
         # 模型评估
         test_acc, scores, sims, vectors, test_pred = self._evaluate(x_test, y_test)
         pickle.dump(test_pred, open('./result/' + self.name + '_test_pred.pkl', 'wb'))
         return test_acc, scores, sims, vectors, history
-
-
-    def han_data1(self, x_train, y_train, x_test, y_test):
-        """脚本参考同build_model1"""
-        # TODO 如何确定句子之间的分界！？之前的处理都不在意句子间的分界，把所有句子当成一个句子来处理。
-        # TODO 以下做法似有不妥？
-        # 1.强行在document(所有句子)后面padding一次，而不是在每个句子后面都padding一次 ？？？
-        # -----------,------,--- ------------,-------- --,000000000000000000 00000000000000000000
-        # 2.强行把document按sent_maxlen(假设为20)划分看，而非原本句子的自然划分 ？？？
-        # -----------,------,---|------------,--------|--,000000000000000000|00000000000000000000
-        # 1和2应该如下所示：  吧？？？
-        # ----------- 000000 000|------000000 00000000|-- -------------00000|----------0000000000
-        from keras.preprocessing.sequence import pad_sequences
-        x_train = pad_sequences(x_train, maxlen=self.sent_maxlen * self.word_maxlen)    # 1
-        x_test = pad_sequences(x_test, maxlen=self.sent_maxlen * self.word_maxlen)
-        x_train = x_train.reshape((len(x_train), self.sent_maxlen, self.word_maxlen))   # 2
-        x_test = x_test.reshape((len(x_test), self.sent_maxlen, self.word_maxlen))
-        return x_train, x_test
-    
     
     
     # 方法2：以下参考https://github.com/yongzhuo/Keras-TextClassification/blob/master/keras_textclassification/m12_HAN/graph.py
@@ -136,7 +126,7 @@ if __name__ == '__main__':
     from Config import Config
     config = Config()
     
-    # data和config准备
+    # data和config准备  详情请参考脚本 ModelTrain.py
     config = pickle.load(open(config.config_file, 'rb'))
     x_train, y_train, x_test, y_test = pickle.load(open(config.data_encoded_file, 'rb'))
     
