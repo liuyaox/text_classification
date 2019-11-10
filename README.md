@@ -14,7 +14,7 @@ Labels: System, Function, Battery, Appearance, Network, Photo, Accessory, Purcha
 
 已标注数据集共有30,000，以下为示例：
 
-![1573355016134](D:\02SourceCode\text_classification\image\1573355016134.png)
+![1573355016134](./image/1573355016134.png)
 
 所以，任务类型：**多标签二分类(Multi-label Binary Classification)**任务，共有11个Labels，每个Label有2种取值(关注，不关注)。
 
@@ -86,21 +86,23 @@ Sklearn 0.21.3
 
 数据预处理环节流程步骤如下图所示：
 
-![1573364046216](D:\02SourceCode\text_classification\image\1573364046216.png)
+![1573364046216](./image/1573364046216.png)
 
 #### 数据清洗和准备
 
-内容：简单而通用的功能，如标注数据处理，分词，分字，分句子，过滤停用词，处理原始Labels
-
 文件：[DataPreprocessing.py](https://github.com/liuyaox/text_classification/blob/master/DataPreprocessing.py)
+
+内容：简单而通用的功能，如标注数据处理，分词，分字，分句子，过滤停用词，处理原始Labels
 
 #### Embedding相关
 
-内容：自己训练Word Embedding，读取公开训练的Word Embedding，支持word+char两种粒度
-
 文件：[Embedding.py](https://github.com/liuyaox/text_classification/blob/master/Embedding.py)
 
+内容：自己训练Word Embedding，读取公开训练的Word Embedding，支持word+char两种粒度
+
 #### Vocabulary相关
+
+文件：[Vocabulary.py](https://github.com/liuyaox/text_classification/blob/master/Vocabulary.py)
 
 内容：
 
@@ -114,37 +116,35 @@ Sklearn 0.21.3
 
 以上功能支持word+char两种粒度
 
-文件：[Vocabulary.py](https://github.com/liuyaox/text_classification/blob/master/Vocabulary.py)
-
 #### 结构化特征
-
-内容：生成TFIDF特征和LSA特征，支持word+char两种粒度，后续会增加支持LSI, LDA等其他特征
 
 文件：[FeatureStructured.py](https://github.com/liuyaox/text_classification/blob/master/FeatureStructured.py)
 
-#### 特征选择
+内容：生成TFIDF特征和LSA特征，支持word+char两种粒度，后续会增加支持LSI, LDA等其他特征
 
-内容：基于卡方统计值等过滤词和字，项目暂时未使用
+#### 特征选择
 
 文件：[TokenSelection.py](https://github.com/liuyaox/text_classification/blob/master/TokenSelection.py)
 
-#### 数据编码
+内容：基于卡方统计值等过滤词和字，项目暂时未使用
 
-内容：使用向量化编码工具和MultiLabelBinarizer进行数据编码
+#### 数据编码
 
 文件 ：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
 
+内容：使用向量化编码工具和MultiLabelBinarizer进行数据编码
+
 #### 数据增强
 
-内容：通过Shuffle和Random Drop进行数据增强，项目暂时未使用
-
 文件 ：[DataAugmentation.py](https://github.com/liuyaox/text_classification/blob/master/DataAugmentation.py)
+
+内容：通过Shuffle和Random Drop进行数据增强，项目暂时未使用
 
 ## Model
 
 使用了多个Model，各Model结构关系如下图所示：
 
-![1573366328001](D:\02SourceCode\text_classification\image\1573366328001.png)
+![1573366328001](./image/1573366328001.png)
 
 #### 使用类继承方式实现三层类定义
 
@@ -229,7 +229,7 @@ config.bert_flag = False
 
 15个模型的评估效果如下图所示：
 
-![1573368628525](D:\02SourceCode\text_classification\image\1573368628525.png)
+![1573368628525](./image/1573368628525.png)
 
 备注：模型并未进行非常精细化的调参，大多是默认配置和参数，所以效果仅供参考。
 
