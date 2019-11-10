@@ -2,7 +2,7 @@
 
 基于Keras的15种模型：TextCNN, TextRNN, TextDPCNN, TextRCNN, TextHAN, TextBert等及其变种
 
-支持5类输入及其组合：word-level, char-level, 结构化特征(TFIDF, LSA), Content特征(word-left, word-right, char-left, char-right), sentence-level
+支持5类特征及其组合：word-level, char-level, 结构化特征(TFIDF, LSA), Context特征(word-left, word-right, char-left, char-right), sentence-level
 
 支持4种分类任务：单标签二分类，单标签多分类，多标签二分类，多标签多分类
 
@@ -16,7 +16,7 @@ Labels: System, Function, Battery, Appearance, Network, Photo, Accessory, Purcha
 
 ![1573355016134](D:\02SourceCode\text_classification\image\1573355016134.png)
 
-所以，任务类型：多标签二分类(**Multi-label Binary Classification**)任务，共有11个Labels，每个Label有2种取值(关注，不关注)。
+所以，任务类型：**多标签二分类(Multi-label Binary Classification)**任务，共有11个Labels，每个Label有2种取值(关注，不关注)。
 
 虽然数据集是关于多标签二分类任务的，但本项目代码适用于**4种分类任务中的任何1种**，只取简单修改Config.py文件即可，基模型定义文件BasicModel.py会自动处理。
 
@@ -49,27 +49,22 @@ elif config.task == 'multilabel':          # 多标签二分类(多标签多分�
 
 #### 附录2：4种分类任务及其处理方法
 
-a. 单标签二分类
+- a. 单标签二分类
 
-  输出为Dense(1, activation='sigmoid')，应用时1个概率值判断其与阈值大小
+    输出为Dense(1, activation='sigmoid')，应用时1个概率值判断其与阈值大小
 
-b. 单标签N分类
+- b. 单标签N分类
 
-  输出为Dense(N, activation='softmax')，应用时N个概率值取Top1
+    输出为Dense(N, activation='softmax')，应用时N个概率值取Top1
 
-c. M标签二分类
+- c. M标签二分类
+  - **c.1** 一个输出：输出为Dense(M, activation=‘sigmoid’)，应用时M个概率值取TopK或与阈值判断大小
+  - c.2 一个输出：问题转化为M分类，类似于b，模型输出结构同b，应用时方法同c.1
 
-​	**c.1** 一个输出：输出为Dense(M, activation=‘sigmoid’)，应用时M个概率值取TopK或与阈值判断大小
-
-​	c.2 一个输出：问题转化为M分类，类似于b，模型输出结构同b，应用时方法同c.1
-
-d. M标签N分类
-
-​	d.1 一个输出：问题转化为MN标签二分类，同c.1
-
-​	d.2 一个输出：问题转化为MN分类，同c.2
-
-​	d.3 M个输出：每个输出都是b，模型输出结构、应用时方法都同b 待尝试
+- d. M标签N分类
+  - d.1 一个输出：问题转化为MN标签二分类，同c.1
+  - d.2 一个输出：问题转化为MN分类，同c.2
+  - d.3 M个输出：每个输出都是b，模型输出结构、应用时方法都同b 待尝试
 
 备注：本项目使用的处理方法是c.1
 
@@ -93,19 +88,19 @@ Sklearn 0.21.3
 
 ![1573364046216](D:\02SourceCode\text_classification\image\1573364046216.png)
 
-###### 数据清洗和准备
+#### 数据清洗和准备
 
 内容：简单而通用的功能，如标注数据处理，分词，分字，分句子，过滤停用词，处理原始Labels
 
 文件：[DataPreprocessing.py](https://github.com/liuyaox/text_classification/blob/master/DataPreprocessing.py)
 
-###### Embedding相关
+#### Embedding相关
 
 内容：自己训练Word Embedding，读取公开训练的Word Embedding，支持word+char两种粒度
 
 文件：[Embedding.py](https://github.com/liuyaox/text_classification/blob/master/Embedding.py)
 
-###### Vocabulary相关
+#### Vocabulary相关
 
 内容：
 
@@ -121,25 +116,25 @@ Sklearn 0.21.3
 
 文件：[Vocabulary.py](https://github.com/liuyaox/text_classification/blob/master/Vocabulary.py)
 
-###### 结构化特征
+#### 结构化特征
 
 内容：生成TFIDF特征和LSA特征，支持word+char两种粒度，后续会增加支持LSI, LDA等其他特征
 
 文件：[FeatureStructured.py](https://github.com/liuyaox/text_classification/blob/master/FeatureStructured.py)
 
-###### 特征选择
+#### 特征选择
 
 内容：基于卡方统计值等过滤词和字，项目暂时未使用
 
 文件：[TokenSelection.py](https://github.com/liuyaox/text_classification/blob/master/TokenSelection.py)
 
-###### 数据编码
+#### 数据编码
 
 内容：使用向量化编码工具和MultiLabelBinarizer进行数据编码
 
 文件 ：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
 
-###### 数据增强
+#### 数据增强
 
 内容：通过Shuffle和Random Drop进行数据增强，项目暂时未使用
 
@@ -151,7 +146,7 @@ Sklearn 0.21.3
 
 ![1573366328001](D:\02SourceCode\text_classification\image\1573366328001.png)
 
-##### 使用类继承方式实现三层类定义
+#### 使用类继承方式实现三层类定义
 
 - BasicModel: 所有模型基类
 
@@ -175,7 +170,7 @@ Sklearn 0.21.3
 
   暂未使用
 
-##### 实现6大类模型(绿色)：共15个模型
+#### 实现6大类模型(绿色)：共15个模型
 
 - TextCNN：标配和基础
 
@@ -191,7 +186,7 @@ Sklearn 0.21.3
 
 - 除此之外，还有5大类待实现模型(灰色)
 
-##### 三层类模型+全局Config的便捷之处
+#### 三层类模型+全局Config的便捷之处
 
 - 支持所有分类任务：二分类，多分类，多标签二分类，多标签多分类
 
@@ -206,6 +201,8 @@ Sklearn 0.21.3
 - 绝大多数模型支持Attention，绝大多数模型支持丰富的参数配置
 
 ## Train & Evaluation
+
+### Train
 
 项目入口脚本：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
 
@@ -238,13 +235,13 @@ config.bert_flag = False
 
 从评估效果中可得出以下结论：
 
-###### 同一模型内
+#### 同一模型内
 
 - word+char比word效果明显有提升
 
 - word+char+structured提升不明显，部分情况下反而会有下降
 
-###### 不同模型间
+#### 不同模型间
 
 - TextCNN训练最快，Precision和F1值相对也较高，可作为一个强有力的Baseline
 
@@ -299,7 +296,7 @@ config.bert_flag = False
 
 <https://github.com/Magic-Bubble/Zhihu> (同上，Rank2)
 
-##### Libray
+#### Libray
 
 kashgari - <https://github.com/BrikerMan/Kashgari>   NLP框架，超级傻瓜，超级Cutting Edge
 
@@ -307,7 +304,7 @@ hyperas - <https://github.com/maxpumperla/hyperas>   Keras超参数优化工具
 
 sk-multilearn - <https://github.com/scikit-multilearn/scikit-multilearn>  Sklearn生态下的多标签分类工具
 
-##### Article
+#### Article
 
 [用深度学习（CNN RNN Attention）解决大规模文本分类问题 - 综述和实践 ](https://zhuanlan.zhihu.com/p/25928551)
 
