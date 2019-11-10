@@ -16,20 +16,20 @@ Labels: System, Function, Battery, Appearance, Network, Photo, Accessory, Purcha
 
 ![1573355016134](./image/1573355016134.png)
 
-所以，任务类型：**多标签二分类(Multi-label Binary Classification)**任务，共有11个Labels，每个Label有2种取值(关注，不关注)。
+所以，任务类型：**多标签二分类**(Multi-label Binary Classification)任务，共有11个Labels，每个Label有2种取值(关注，不关注)。
 
 虽然数据集是关于多标签二分类任务的，但本项目代码适用于**4种分类任务中的任何1种**，只取简单修改Config.py文件即可，基模型定义文件BasicModel.py会自动处理。
 
 #### 附录1：Config.py和BasicModel.py中关于任务类型的配置和处理代码
 
 ```python
-# 以下是Config.py文件内容
+# Config.py
 self.task = 'multilabel'
 self.token_level = 'word'       # word: word粒度  char: char粒度  both: word+char粒度
 self.N_CLASSES = 11             # 标签/类别数量
 
-# 以下是BasicModel.py文件内容
-# 任务类型决定了类别数量、激活函数和损失函数
+# BasicModel.py
+# 任务类型决定了类别数量、激活函数、损失函数和评估指标
 if config.task == 'binary':                # 单标签二分类
     self.n_classes =  1
     self.activation = 'sigmoid'
@@ -106,11 +106,11 @@ Sklearn 0.21.3
 
 内容：
 
-生成词汇表，支持低频高频词过滤；
+生成词汇表，支持低频高频词过滤
 
-基于Embedding生成<word, idx, vector>三者之间的映射字典；
+基于Embedding生成<word, idx, vector>三者之间的映射字典
 
-生成Embedding Layer初始化权重；
+生成Embedding Layer初始化权重
 
 基于映射字典的向量化编码工具(支持截断、补零、including和excluding)
 
@@ -126,7 +126,7 @@ Sklearn 0.21.3
 
 文件：[TokenSelection.py](https://github.com/liuyaox/text_classification/blob/master/TokenSelection.py)
 
-内容：基于卡方统计值等过滤词和字，项目暂时未使用
+内容：基于卡方统计值等过滤词和字，项目暂未使用
 
 #### 数据编码
 
@@ -138,7 +138,7 @@ Sklearn 0.21.3
 
 文件 ：[DataAugmentation.py](https://github.com/liuyaox/text_classification/blob/master/DataAugmentation.py)
 
-内容：通过Shuffle和Random Drop进行数据增强，项目暂时未使用
+内容：通过Shuffle和Random Drop进行数据增强，项目暂未使用
 
 ## Model
 
@@ -265,7 +265,7 @@ config.bert_flag = False
 
    b. 动态搭建模型，使其无缝支持多种输入及其组合
 
-   方法：通用方法位于父类BasicDeepModel，各子类模型TextXXX分为**模型主体和模型结尾**2部分，模型核心的纯粹的结构位于模型主体，根据输入不同，进行配置和组装，然后接入模型结尾
+   方法：通用方法位于父类BasicDeepModel，各子类模型分为**模型主体和模型结尾**2部分，模型核心的纯粹的结构位于模型主体，根据输入不同，进行配置和组装，然后接入模型结尾
 
    c. 不同类模型，先选择最简单的模型如TextCNN，深入研究经验和Tricks，然后复制到别的模型
 
@@ -273,40 +273,41 @@ config.bert_flag = False
 
 5. 模型组件
 
-   CNN+RNN是标配，CNN提取关键词，RNN适合前几层，提取依赖信息，Attention和MaxPooling可突出关键特征
+   a. CNN+RNN是标配，CNN提取关键词，RNN适合前几层，提取依赖信息，Attention和MaxPooling可突出关键特征
 
-   Capsule可代替CNN，有时效果好于CNN
+   b. Capsule可代替CNN，有时效果好于CNN
 
-   有条件就使用Bert
+   c. 有条件就使用Bert
 
 ## Reference
 
 #### Code
 
-文本分类模型 - Keras
+- 文本分类 - Keras
 
-<https://github.com/nlpjoe/daguan-classify-2018>
+  <https://github.com/nlpjoe/daguan-classify-2018>
 
-<https://github.com/yongzhuo/Keras-TextClassification>
+  <https://github.com/yongzhuo/Keras-TextClassification>
 
-<https://github.com/ShawnyXiao/TextClassification-Keras>
+  <https://github.com/ShawnyXiao/TextClassification-Keras>
 
-多标签分类 - PyTorch
-<https://github.com/chenyuntc/PyTorchText> (2017知乎看山杯 多标签文本分类大赛 Rank1)
+- 多标签分类 - PyTorch
 
-<https://github.com/Magic-Bubble/Zhihu> (同上，Rank2)
+  <https://github.com/chenyuntc/PyTorchText> (2017知乎看山杯 多标签文本分类大赛 Rank1)
+
+  <https://github.com/Magic-Bubble/Zhihu> (同上，Rank2)
 
 #### Libray
 
-kashgari - <https://github.com/BrikerMan/Kashgari>   NLP框架，超级傻瓜，超级Cutting Edge
+- [kashgari](https://github.com/BrikerMan/Kashgari) : NLP框架，超级傻瓜，超级Cutting Edge
 
-hyperas - <https://github.com/maxpumperla/hyperas>   Keras超参数优化工具
+- [hyperas](https://github.com/maxpumperla/hyperas) : Keras超参数优化工具
 
-sk-multilearn - <https://github.com/scikit-multilearn/scikit-multilearn>  Sklearn生态下的多标签分类工具
+- [sk-multilearn](https://github.com/scikit-multilearn/scikit-multilearn) : Sklearn生态下的多标签分类工具
 
 #### Article
 
-[用深度学习（CNN RNN Attention）解决大规模文本分类问题 - 综述和实践 ](https://zhuanlan.zhihu.com/p/25928551)
+- [用深度学习（CNN RNN Attention）解决大规模文本分类问题 - 综述和实践 ](https://zhuanlan.zhihu.com/p/25928551)
 
-[在文本分类任务中，有哪些论文中很少提及却对性能有重要影响的tricks？](https://www.zhihu.com/question/265357659)
+- [在文本分类任务中，有哪些论文中很少提及却对性能有重要影响的tricks？](https://www.zhihu.com/question/265357659)
 
