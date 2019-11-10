@@ -99,7 +99,7 @@ def example_lsa():
     char_model_tfidf, char_tfidf, char_model_svd, char_lsa = FeatureStructured.lsa_vectorizer_2steps(
             sentences_char, vocabulary=vocab.char2idx, n_components=config.char_svd_n_componets)
     
-    # TODO char粒度的特征计算错误！！！！！！
+    # TODO char粒度的特征计算好像有点问题！
     pickle.dump((word_model_tfidf, word_tfidf, word_model_svd, word_lsa), open(config.word_tfidf_lsa_file, 'wb'))
     pickle.dump((char_model_tfidf, char_tfidf, char_model_svd, char_lsa), open(config.char_tfidf_lsa_file, 'wb'))
 

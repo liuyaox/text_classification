@@ -3,6 +3,7 @@ data/
 doc/
 local/
 aspect_extraction.py
+.idea/
 
 
 
