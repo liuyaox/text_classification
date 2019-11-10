@@ -68,7 +68,7 @@ elif config.task == 'multilabel':          # 多标签二分类(多标签多分�
 
 备注：本项目使用的处理方法是c.1
 
-## Environment
+## Requirement
 
 Python 3.6.5
 
@@ -132,7 +132,7 @@ Sklearn 0.21.3
 
 文件 ：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
 
-内容：使用向量化编码工具和MultiLabelBinarizer进行数据编码
+内容：使用向量化编码工具和MultiLabelBinarizer对特征和Label进行编码
 
 #### 数据增强
 
@@ -154,21 +154,19 @@ Sklearn 0.21.3
 
 - BasicDeepModel: 深度学习模型基类
 
-  通用Layer创建
+  通用Layers创建
 
   绘制Loss和Metrics
 
   Embedding冻结和解冻
 
-  模型训练和评估
-
-  模型训练和评估-CV
+  模型训练和评估（支持CV）
 
   学习率Schedular
 
 - BasicStatModel: 传统模型基类
 
-  暂未使用
+  暂未实现
 
 #### 实现6大类模型(绿色)：共15个模型
 
@@ -182,9 +180,9 @@ Sklearn 0.21.3
 
 - TextHAN：使用了层次注意力机制
 
-- TextBert：在TextGRU基础上只是把输入改为Bert生成的向量
+- TextBert：在TextGRU基础上把输入改为Bert编码的向量
 
-- 除此之外，还有5大类待实现模型(灰色)
+- 此外，还有5大类待实现模型(灰色)
 
 #### 三层类模型+全局Config的便捷之处
 
@@ -194,7 +192,7 @@ Sklearn 0.21.3
 
   [word, char, word-structure, char-structure]中任意的4选1，4选2，4选3，4选4
 
-  同时对于一些特殊模型，支持特殊输入，如TextRCNN模型的word-left, word-right, char-left, char-right，以及TextHAN模型的Sentence-level
+  另外对于一些特殊模型，支持特殊输入，如TextRCNN模型的Context特征(word-left, word-right, char-left, char-right)，以及TextHAN模型的Sentence-level特征
 
 - 模型训练评估支持KFold，支持6种Finetuning方式
 
@@ -206,49 +204,48 @@ Sklearn 0.21.3
 
 项目入口脚本：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
 
-该脚本包含项目全流程，包括：数据准备、Token筛选、特征和Label编码、划分Train/Test、模型配置和生成、模型训练和评估、模型保存等，详见脚本注释。
+该脚本包含项目全流程，包括：数据准备、Token筛选、特征和Label编码、划分Train/Test、环境配置、模型生成、模型训练和评估、模型持久化，详见脚本注释。
 
-需要补充一点：在运行该脚本前，需要先准备好Embedding、Vocabulary、结构化特征等，详见上面Data Preprocessing部分。
+需要补充一点：在运行该脚本前，需要先准备好Embedding、Vocabulary、结构化特征等，详见Data Preprocessing部分。
 
-命令行功能暂时未添加，后续会添加。
+命令行功能暂未添加，后续会添加。
 
 运行脚本：python3 ModelTrain.py
 
-在运行脚本之前，先修改脚本里相应配置项，内容如下：
+在运行脚本之前，先修改脚本里的配置项，内容如下：
 
 ```python
 # 根据实际情况修改，也可直接在Config.py里修改，推荐前者
-# 以下配置内容：只使用word-level特征，不使用char-level和结构化特征，不使用Bert编码的输入向量
 config.n_gpus = 1
-config.token_level = 'word'
-config.structured = 'none'
-config.bert_flag = False
+config.token_level = 'word'		# 只使用word-level特征，不使用char-level
+config.structured = 'none'		# 不使用结构化特征
+config.bert_flag = False		# 不使用Bert编码的输入向量
 ```
 
 ### Evaluation
 
-15个模型的评估效果如下图所示：
+15个模型的评估结果如下表所示：
 
 ![1573368628525](./image/1573368628525.png)
 
-备注：模型并未进行非常精细化的调参，大多是默认配置和参数，所以效果仅供参考。
+备注：模型并未进行精细化调参，大多是默认配置和参数，效果仅供参考。
 
-从评估效果中可得出以下结论：
+从评估结果中可得出以下结论：
 
 #### 同一模型内
 
-- word+char比word效果明显有提升
+- word+char相比word，效果明显有提升
 
-- word+char+structured提升不明显，部分情况下反而会有下降
+- word+char+structured相比word+char，效果提升不明显，一些情况下反而会下降
 
 #### 不同模型间
 
 - TextCNN训练最快，Precision和F1值相对也较高，可作为一个强有力的Baseline
 
-- TextRNN训练很慢，效果也不是特别好，可能是因为训练数据很多是短文本
+- TextRNN训练很慢，效果不是特别好，可能是因为训练数据很多是短文本
 
-- 各模型之间效果差不多(全是默认参数，没时间精细化调参)
-- 输入改为Bert编码向量后效果比较明显，简单的模型(TextGRU)就得到了最好的F1值，后续值得好好研究
+- 各模型之间效果差不多(全是默认参数，没时间做精细化调参)
+- 输入改为Bert编码向量后效果提升比较明显，简单的模型(TextGRU)就得到了最好的F1值，后续值得好好研究
 - TextHAN比较给力，取到了最高的Precision，后续值得好好研究
 
 ## Conclusion
