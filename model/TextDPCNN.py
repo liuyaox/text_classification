@@ -33,11 +33,12 @@ class TextDPCNN(BasicDeepModel):
         X1 = PReLU()(X1)
         X1 = Conv1D(n_filters, kernel_size=filter_size, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X1)
         X1 = BatchNormalization()(X1)
-        X1 = PReLU()(X1)                # (, 57, 64)
+        X1 = PReLU()(X1)            # (, 57, 64)
         
         if first:
             X = Conv1D(n_filters, kernel_size=1, padding='same', kernel_regularizer=kernel_reg, bias_regularizer=bias_reg)(X)   # (, 57, 64)
-        X = Add()([X, X1])      # (, 57, 64)
+        
+        X = Add()([X, X1])          # (, 57, 64)
         
         if last:
             X = GlobalMaxPooling1D()(X)
@@ -62,7 +63,7 @@ class TextDPCNN(BasicDeepModel):
         # Region Embedding
         X = masking(inputs)
         X = embedding(X)
-        X = BatchNormalization()(X)     # (None, 57, 100)
+        X = BatchNormalization()(X)     # (, 57, 100)
         
         # 第1层 pre-activation
         X = self.block(X, n_filters, filter_size, kernel_reg, bias_reg, first=True)     # (, 28, 64)

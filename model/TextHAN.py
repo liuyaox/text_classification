@@ -20,7 +20,7 @@ class TextHAN(BasicDeepModel):
         self.rnn_units2 = rnn_units2
         self.sent_maxlen = config.SENT_MAXLEN
         self.word_maxlen = config.WORD_MAXLEN
-        self.sent_input = Input(shape=(self.sent_maxlen, self.word_maxlen), dtype='int32', name='sentence1')  # (None, sent_maxlen, word_maxlen)
+        self.sent_input = Input(shape=(self.sent_maxlen, self.word_maxlen), dtype='int32', name='sentence1')  # (, sent_maxlen, word_maxlen)
         name = 'TextHAN'
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
@@ -29,26 +29,25 @@ class TextHAN(BasicDeepModel):
     # 脚本https://github.com/AlexYangLi/TextClassification/blob/master/models/keras_han_model.py与方法1其实是一样的，只是写法不同
     # 脚本https://github.com/richliao/textClassifier/blob/master/textClassifierHATT.py与方法1是一样的
     def build_model(self):
-        # Sentence Part                                                       sent_input: (None, sent_maxlen, word_maxlen)
-        X = TimeDistributed(self.word_encoder(), name='word_encoder')(self.sent_input)  # (None, sent_maxlen, 2*rnn_units1)
-        X = Masking()(X)  # TODO 实验验证，加不加，影响不大。为什么？何时需要？
+        # Sentence Part                                                       sent_input: (, sent_maxlen, word_maxlen)
+        X = TimeDistributed(self.word_encoder(), name='word_encoder')(self.sent_input)  # (, sent_maxlen, 2*rnn_units1)
+        X = Masking()(X)        # TODO 实验验证，加不加，影响不大。为什么？何时需要？
         X = BatchNormalization()(X)
-        X = Bidirectional(LSTM(self.rnn_units2, return_sequences=True))(X)  # (None, sent_maxlen, 2*rnn_units2)
-        X = Attention(self.sent_maxlen)(X)                                  # (None, 2*rnn_units2)
+        X = Bidirectional(LSTM(self.rnn_units2, return_sequences=True))(X)  # (, sent_maxlen, 2*rnn_units2)
+        X = Attention(self.sent_maxlen)(X)                                  # (, 2*rnn_units2)
         
         X = Dropout(0.5)(X)
-        # X = Dense(64, activation='relu')(X)  # 实验验证，加不加，影响不大
-        out = Dense(self.n_classes, activation=self.activation)(X)          # (None, n_classes)
-        self.model = Model(inputs=self.sent_input, outputs=out)  # TODO 注意inputs是Sentence Part处的inputs(而非Word Part处的word_input)！
+        out = Dense(self.n_classes, activation=self.activation)(X)          # (, n_classes)
+        self.model = Model(inputs=self.sent_input, outputs=out)  # TODO 注意inputs是Sentence Part的inputs(而非Word Part)！
 
 
     def word_encoder(self):
         # Word Part 模型，提供word level的编码功能
-        word_X = self.word_masking(self.word_input)                 # (None, word_maxlen)
-        word_X = self.word_embedding(word_X)                        # (None, word_maxlen, word_embed_dim)
+        word_X = self.word_masking(self.word_input)                 # (, word_maxlen)
+        word_X = self.word_embedding(word_X)                        # (, word_maxlen, word_embed_dim)
         word_X = BatchNormalization()(word_X)
-        word_X = Bidirectional(LSTM(self.rnn_units1, return_sequences=True))(word_X) # (None, word_maxlen, 2*rnn_units1)
-        word_out = Attention(self.word_maxlen)(word_X)              # (None, 2*rnn_units1)  # TODO 能不能使用AttentionAverageWeighted
+        word_X = Bidirectional(LSTM(self.rnn_units1, return_sequences=True))(word_X) # (, word_maxlen, 2*rnn_units1)
+        word_out = Attention(self.word_maxlen)(word_X)              # (, 2*rnn_units1)  # TODO 能不能使用AttentionAverageWeighted
         return Model(inputs=self.word_input, outputs=word_out)
 
 
@@ -59,36 +58,27 @@ class TextHAN(BasicDeepModel):
         self.mode = 3
         epochs = epochs if epochs else (2, self.n_epochs)
         
+        def model_compile_fit(lr=1e-4, epochs=3):
+            self.model.compile(loss=self.loss, optimizer=Adam(lr=lr), metrics=self.metrics)
+            return self.model.fit(x_train, y_train, 
+                                      batch_size=self.batch_size*self.config.n_gpus,
+                                      epochs=epochs,
+                                      validation_split=0.3,
+                                      callbacks=None)
+        
         print('-------------------Step1: 前期冻结Word_Encoder层，编译和训练模型-------------------')
         self.model.get_layer('word_encoder').trainable = False      # TODO word_encoder由很多层组成，如何只设置其中的Embedding？？
-        history1 = None         # 编译和训练过程同Step2
+        history1 = model_compile_fit(1e-4, 3)
+        history1 = model_compile_fit(1e-5, 3)
+        history1 = model_compile_fit(1e-6, 3)
+        history1 = model_compile_fit(1e-7, 3)
         
-        print('-------------Step2: 训练完参数后，解冻Word_Encoder层，再次编译和训练模型-------------')
+        print('-------------Step2: 训练完参数后，解冻Word_Encoder层，再次编译和训练模型------------')
         self.model.get_layer('word_encoder').trainable = True
-        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-4), metrics=self.metrics)
-        history2 = self.model.fit(x_train, y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=3,
-                                  validation_split=0.3,
-                                  callbacks=None)
-        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-5), metrics=self.metrics)
-        history2 = self.model.fit(x_train, y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=3,
-                                  validation_split=0.3,
-                                  callbacks=None)
-        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-6), metrics=self.metrics)
-        history2 = self.model.fit(x_train, y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=3,
-                                  validation_split=0.3,
-                                  callbacks=None)
-        self.model.compile(loss=self.loss, optimizer=Adam(lr=1e-7), metrics=self.metrics)
-        history2 = self.model.fit(x_train, y_train, 
-                                  batch_size=self.batch_size*self.config.n_gpus,
-                                  epochs=3,
-                                  validation_split=0.3,
-                                  callbacks=None)
+        history2 = model_compile_fit(1e-4, 3)
+        history2 = model_compile_fit(1e-5, 3)
+        history2 = model_compile_fit(1e-6, 3)
+        history2 = model_compile_fit(1e-7, 3)
         self.plot_history(history2)
         history = (history1, history2)
         
@@ -103,18 +93,18 @@ class TextHAN(BasicDeepModel):
     # TODO 输入是self.word_embedding.input？？？待研究！
     def build_model2(self):
         # Word Part
-        word_X = self.word_embedding.output                         # (None, word_maxlen, word_embed_dim)
-        word_X = Bidirectional(GRU(units=self.rnn_units1, return_sequences=True, activation='relu'))(word_X) # (None, word_maxlen, 2*rnn_units1)
-        word_X = AttentionSelf(self.rnn_units*2)(word_X)            # (None, word_maxlen, 2*rnn_units)
+        word_X = self.word_embedding.output                         # (, word_maxlen, word_embed_dim)
+        word_X = Bidirectional(GRU(units=self.rnn_units1, return_sequences=True, activation='relu'))(word_X) # (, word_maxlen, 2*rnn_units1)
+        word_X = AttentionSelf(self.rnn_units*2)(word_X)            # (, word_maxlen, 2*rnn_units)
         word_X = Dropout(0.5)(word_X)
 
         # Sentence Part
-        X = Bidirectional(GRU(units=self.rnn_units2, return_sequences=True, activation='relu'))(word_X)      # (None, word_maxlen, 2*rnn_units2)
-        X = AttentionSelf(self.word_embed_dim)(X)                   # (None, word_maxlen, word_embed_dim)
+        X = Bidirectional(GRU(units=self.rnn_units2, return_sequences=True, activation='relu'))(word_X)      # (, word_maxlen, 2*rnn_units2)
+        X = AttentionSelf(self.word_embed_dim)(X)                   # (, word_maxlen, word_embed_dim)
         X = Dropout(0.5)(X)
 
-        X = Flatten()(X)                                            # (None, word_maxlen * word_embed_dim)
-        out = Dense(self.n_classes, activation=self.activation)(X)  # (None, n_classes)
+        X = Flatten()(X)                                            # (, word_maxlen * word_embed_dim)
+        out = Dense(self.n_classes, activation=self.activation)(X)  # (, n_classes)
         self.model = Model(inputs=self.word_embedding.input, outputs=out)
         
         

@@ -13,13 +13,13 @@ from model.BasicModel import BasicDeepModel
 from model.Layers import AttentionWeightedAverage
 
 
-class TextLSTMGRU(BasicDeepModel):
+class TextLSTMGRU_Attn(BasicDeepModel):
     
     def __init__(self, config=None, rnn_units=64, dropout_p=0.25, with_attention=False, **kwargs):
         self.rnn_units = rnn_units
         self.dropout_p = dropout_p
         self.with_attention = with_attention
-        name = 'TextLSTMGRU_' + config.token_level
+        name = 'TextLSTMGRU_Attn_' + config.token_level
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
         

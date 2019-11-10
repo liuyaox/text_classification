@@ -12,7 +12,7 @@ from keras.models import Model
 from model.BasicModel import BasicDeepModel
 
 
-class TextCNN2(BasicDeepModel):
+class TextCNN_BiGRU(BasicDeepModel):
     """TextCNN模型，支持char,word和both. both时char进行TextCNN，word进行RNN，然后拼接结果"""
     
     def __init__(self, config=None, fsizes=(2, 5), n_filters=64, rnn_units=64, dropout_p=0.25, **kwargs):
@@ -20,7 +20,7 @@ class TextCNN2(BasicDeepModel):
         self.n_filters = n_filters      # TODO 是否是BasicDeepModel通用？通用的话放在BasicDeepModel那里
         self.rnn_units = rnn_units
         self.dropout_p = dropout_p
-        name = 'TextCNN2_' + config.token_level
+        name = 'TextCNN_BiGRU_' + config.token_level
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
         
@@ -56,7 +56,7 @@ class TextCNN2(BasicDeepModel):
             inputs = [self.char_input]
             
         else:
-            # 对word进行特殊处理！  # TODO WHY???
+            # 对word进行特殊处理！ word的BiGRU + char的TextCNN # TODO WHY???
             word_X = self.word_embedding(self.word_input)
             word_X = BatchNormalization()(word_X)
             for _ in range(2):

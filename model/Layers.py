@@ -35,6 +35,7 @@ class AttentionWeightedAverage(Layer):
             logit = W * x - max(W * x)    # 相当于小神经网络: x -> logit
             attn = softmax(logit) = exp(logit) / (sum(exp(logit)) + epsilon)
             result = sum(attn * x)
+            简写：result=sum(p(x)*x)  p(x)=softmax(Wx)  点积模型
         """
         logit = K.dot(x, self.W)                                    # (i0, i1, i2) dot (i2, 1) -> (i0, i1, 1)
         logit = K.reshape(logit, (K.shape(x)[0], K.shape(x)[1]))    # -> (i0, i1)
@@ -43,7 +44,7 @@ class AttentionWeightedAverage(Layer):
         
         # masked timesteps have 0 weight
         if mask:
-            ai = ai * K.cast(mask, K.floatx())                   # (i0, i1)
+            ai = ai * K.cast(mask, K.floatx())                      # (i0, i1)
         
         attn = ai / (K.sum(ai, axis=1, keepdims=True) + K.epsilon())    # (i0, i1)
         result = K.sum(x * K.expand_dims(attn), axis=1)                 # (i0, i1, i2) * (i0, i1, 1) -> (i0, i1, i2) -> (i0, i2)
@@ -175,6 +176,9 @@ class Attention(Layer):
 
 
     def call(self, x, mask=None):
+        """
+        简写：result=sum(p(x)*x)   p(x)=softmax(tanh(Wx+b))  加性模型
+        """
         features_dim = self.features_dim
         step_dim = self.step_dim
         e = K.reshape(K.dot(K.reshape(x, (-1, features_dim)), K.reshape(self.W, (features_dim, 1))), (-1, step_dim))  # e = K.dot(x, self.W)
@@ -189,8 +193,8 @@ class Attention(Layer):
         # A workaround is to add a very small positive number ε to the sum.
         a /= K.cast(K.sum(a, axis=1, keepdims=True) + K.epsilon(), K.floatx())    # a = softmax(e) = softmax(tanh(Wx + b)) = p(x) 表示一种权重
         a = K.expand_dims(a)
-        c = K.sum(a * x, axis=1)    # c = sum(p(x) * x)  对x加权求和
-        return c
+        result = K.sum(a * x, axis=1)    # result = sum(p(x) * x)  对x加权求和
+        return result
 
 
     def compute_output_shape(self, input_shape):
@@ -221,15 +225,16 @@ class AttentionSelf(Layer):
         WV = K.dot(x, self.kernel[2])
         print("WQ.shape", WQ.shape)
         print("K.permute_dimensions(WK, [0, 2, 1]).shape", K.permute_dimensions(WK, [0, 2, 1]).shape)
+        
         QK = K.batch_dot(WQ, K.permute_dimensions(WK, [0, 2, 1]))
         QK = QK / (64 ** 0.5)
         QK = K.softmax(QK)
         print("QK.shape", QK.shape)
+        
         V = K.batch_dot(QK, WV)
         return V
 
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[1], self.output_dim)
-
 

@@ -14,13 +14,13 @@ from model.BasicModel import BasicDeepModel
 from model.Layers import AttentionWeightedAverage
 
 
-class TextRCNNSimple(BasicDeepModel):
+class TextRCNN_Attn(BasicDeepModel):
     """简易版TextRCNN"""
     
     def __init__(self, config=None, rnn_units=64, n_filters=64, **kwargs):
         self.rnn_units = rnn_units
         self.n_filters = n_filters
-        name = 'TextRCNNSimple_' + config.token_level
+        name = 'TextRCNN_Attn_' + config.token_level
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
         

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created:    2019-08-17 19:20:59
+Created:    2019-08-17 18:43:40
 Author:     liuyao8
 Descritipn: 
 """
@@ -13,18 +13,18 @@ from model.BasicModel import BasicDeepModel
 from model.Layers import AttentionWeightedAverage
 
 
-class TextGRU2(BasicDeepModel):
+class TextGRU_Attn(BasicDeepModel):
     
-    def __init__(self, config=None, n_rnns=None, rnn_units=64, dropout_p=0.25, with_attention=True, **kwargs):
+    def __init__(self, config=None, n_rnns=None, rnn_units=64, dropout_p=0.5, **kwargs):
         if n_rnns is None:
             self.n_rnns = (2, 2) if config.token_level == 'both' else 2
         self.rnn_units = rnn_units
         self.dropout_p = dropout_p
-        name = 'TextGRU2_' + config.token_level
+        name = 'TextGRU_Attn_' + config.token_level
         BasicDeepModel.__init__(self, config=config, name=name, **kwargs)
         
-        
-    def model_unit(self, inputs, masking, embedding, n_rnns=None, rnn_units=None, dropout_p=None, with_attention=None):
+    
+    def model_unit(self, inputs, masking, embedding, n_rnns=None, rnn_units=None, dropout_p=None):
         """模型主体Unit"""
         if n_rnns is None:
             n_rnns = self.n_rnns
@@ -36,8 +36,6 @@ class TextGRU2(BasicDeepModel):
             dropout_p = [self.dropout_p] * n_rnns
         if isinstance(dropout_p, float):
             dropout_p = [dropout_p] * n_rnns
-        if with_attention is None:
-            with_attention = self.with_attention
         
         X = masking(inputs)
         X = embedding(X)
@@ -48,12 +46,9 @@ class TextGRU2(BasicDeepModel):
         
         maxpool = GlobalMaxPooling1D()(X)
         avgpool = GlobalAveragePooling1D()(X)
-        last = Lambda(lambda x: x[:, -1])(X)        # TODO 注释掉！？
-        if with_attention:
-            attn = AttentionWeightedAverage()(X)
-            X = Concatenate()([maxpool, avgpool, last, attn])
-        else:
-            X = Concatenate()([maxpool, avgpool, last])
+        last = Lambda(lambda x: x[:, -1])(X)
+        attn = AttentionWeightedAverage()(X)
+        X = Concatenate()([maxpool, avgpool, last, attn])
         return X
     
     
@@ -68,9 +63,7 @@ class TextGRU2(BasicDeepModel):
             inputs = [self.char_input]
             
         else:
-            # 对word进行特殊处理！  # TODO WHY???
-            # TODO 与TextGRU的唯一区别，后续TextAttention和TextAttention2可统一成一个
-            word_X = self.model_unit(self.word_input, self.word_masking, self.word_embedding, self.n_rnns[0], with_attention=False)
+            word_X = self.model_unit(self.word_input, self.word_masking, self.word_embedding, self.n_rnns[0])
             char_X = self.model_unit(self.char_input, self.char_masking, self.char_embedding, self.n_rnns[1])
             X = Concatenate()([word_X, char_X])
             inputs = [self.word_input, self.char_input]
