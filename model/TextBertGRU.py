@@ -38,11 +38,11 @@ class TextBertGRU(BasicDeepModel):
         self.model = Model(inputs=self.word_input, outputs=out)
     
     
+    # 模型创建、训练与评估，详见脚本ModelTrain.py中的example函数
     
     
     
-    
-    # TODO 以下待办    设计成数据编码环节，可通用于其他所有模型！
+    # TODO 以下待办，暂时不用看    设计成数据编码环节，可通用于其他所有模型！
     def build_bert_model(self):
         self.bert_model = BertVector(pooling_strategy='NONE',
                                      max_seq_len=self.config.bert_maxlen, 

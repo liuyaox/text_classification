@@ -10,6 +10,7 @@ from keras import initializers, regularizers, constraints
 from keras import backend as K
 
 
+
 class AttentionWeightedAverage(Layer):
     """
     A weighted Average of different channels across timesteps
@@ -35,7 +36,7 @@ class AttentionWeightedAverage(Layer):
             logit = W * x - max(W * x)    # 相当于小神经网络: x -> logit
             attn = softmax(logit) = exp(logit) / (sum(exp(logit)) + epsilon)
             result = sum(attn * x)
-            简写：result=sum(p(x)*x)  p(x)=softmax(Wx)  点积模型
+            简写：result=sum(p(x)*x)  p(x)=softmax(Wx)  加性模型？？？
         """
         logit = K.dot(x, self.W)                                    # (i0, i1, i2) dot (i2, 1) -> (i0, i1, 1)
         logit = K.reshape(logit, (K.shape(x)[0], K.shape(x)[1]))    # -> (i0, i1)
@@ -58,6 +59,122 @@ class AttentionWeightedAverage(Layer):
         return (input_shape[0], input_shape[2])
         
 
+
+class Attention(Layer):
+    """
+    Keras Layer that implements an Attention mechanism for temporal data.
+    Supports Masking.
+    Follows the work of Raffel et al. [https://arxiv.org/abs/1512.08756]
+    # Input shape
+        3D tensor with shape: `(samples, steps, features)`.
+    # Output shape
+        2D tensor with shape: `(samples, features)`.
+    :param kwargs:
+    Just put it on top of an RNN Layer (GRU/LSTM/SimpleRNN) with return_sequences=True.
+    The dimensions are inferred based on the output shape of the RNN.
+    Example:
+        hidden = LSTM(64, return_sequences=True)(words)
+        sentence = Attention()(hidden)
+        # next add a Dense layer (for classification/regression) or whatever...
+    代码源自：https://github.com/ShawnyXiao/TextClassification-Keras/blob/master/model/HAN/attention.py
+    """
+    def __init__(self, step_dim, W_regularizer=None, b_regularizer=None, W_constraint=None, b_constraint=None, bias=True, **kwargs):
+        self.supports_masking = True
+        self.init = initializers.get('glorot_uniform')
+        self.W_regularizer = regularizers.get(W_regularizer)
+        self.b_regularizer = regularizers.get(b_regularizer)
+        self.W_constraint = constraints.get(W_constraint)
+        self.b_constraint = constraints.get(b_constraint)
+        self.bias = bias
+        self.step_dim = step_dim
+        self.features_dim = 0
+        super(Attention, self).__init__(**kwargs)
+
+
+    def build(self, input_shape):
+        assert len(input_shape) == 3
+        self.W = self.add_weight(shape=(input_shape[-1], ), name='{}_W'.format(self.name),
+                                 initializer=self.init, regularizer=self.W_regularizer, constraint=self.W_constraint)
+        self.features_dim = input_shape[-1]
+        if self.bias:
+            self.b = self.add_weight(shape=(input_shape[1], ), name='{}_b'.format(self.name),
+                                     initializer='zero', regularizer=self.b_regularizer, constraint=self.b_constraint)
+        else:
+            self.b = None
+        self.built = True
+
+
+    def compute_mask(self, input, input_mask=None):
+        # do not pass the mask to the next layers
+        return None
+
+
+    def call(self, x, mask=None):
+        """简写：result=sum(p(x)*x)   p(x)=softmax(tanh(Wx+b))  加性模型"""
+        features_dim = self.features_dim
+        step_dim = self.step_dim
+        e = K.reshape(K.dot(K.reshape(x, (-1, features_dim)), K.reshape(self.W, (features_dim, 1))), (-1, step_dim))  # e = K.dot(x, self.W)
+        if self.bias:
+            e += self.b
+        e = K.tanh(e)       # e = tanh(Wx + b)
+        a = K.exp(e)        # a = exp(e)
+        # apply mask after the exp. will be re-normalized next
+        if mask is not None:
+            a *= K.cast(mask, K.floatx())   # cast the mask to floatX to avoid float64 upcasting in theano
+        # In some cases especially in the early stages of training, the sum may be almost zero and this results in NaN's.
+        # A workaround is to add a very small positive number ε to the sum.
+        a /= K.cast(K.sum(a, axis=1, keepdims=True) + K.epsilon(), K.floatx())    # a = softmax(e) = softmax(tanh(Wx + b)) = p(x) 表示一种权重
+        a = K.expand_dims(a)
+        result = K.sum(a * x, axis=1)    # result = sum(p(x) * x)  对x加权求和
+        return result
+
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0], self.features_dim
+    
+    
+    
+class AttentionSelf(Layer):
+    """
+    Self Attention, codes from: https://blog.csdn.net/xiaosongshine/article/details/90600028
+    代码源自：https://github.com/yongzhuo/Keras-TextClassification/blob/master/keras_textclassification/keras_layers/attention_self.py
+    """
+    def __init__(self, output_dim, **kwargs):
+        self.output_dim = output_dim
+        super().__init__(**kwargs)
+
+
+    def build(self, input_shape):
+        # Q、K and V
+        self.kernel = self.add_weight(name='QKV', shape=(3, input_shape[2], self.output_dim), trainable=True,
+                                      initializer='uniform', regularizer=regularizers.L1L2(0.0000032))
+        super().build(input_shape)
+
+
+    def call(self, x):
+        '''简写：res=p(x)*Vx  p(x)=softmax(Qx*Kx)'''
+        QX = K.dot(x, self.kernel[0])
+        KX = K.dot(x, self.kernel[1])
+        VX = K.dot(x, self.kernel[2])
+        print("QX.shape", QX.shape)
+        print("K.permute_dimensions(KX, [0, 2, 1]).shape", K.permute_dimensions(KX, [0, 2, 1]).shape)
+        
+        # batch_dot: 即batch-wise dot product，X与Y同一batch分别是Xi和Yi，则dot(Xi, Yi.T)为该batch的结果，遍历所有batch
+        # 当axes!=None时另说
+        QK = K.batch_dot(QX, K.permute_dimensions(KX, [0, 2, 1]))
+        QK = QK / (64 ** 0.5)
+        QK = K.softmax(QK)
+        print("QK.shape", QK.shape)
+        
+        res = K.batch_dot(QK, VX)
+        return res
+
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.output_dim)
+
+        
+        
 def squash(x, axis=-1):
     # s_squared_norm is really small
     # s_squared_norm = K.sum(K.square(x), axis, keepdims=True) + K.epsilon()
@@ -67,6 +184,7 @@ def squash(x, axis=-1):
     scale = K.sqrt(s_squared_norm + K.epsilon())
     return x / scale
 
+    
 
 class Capsule(Layer):
     """
@@ -118,123 +236,3 @@ class Capsule(Layer):
 
     def compute_output_shape(self, input_shape):
         return (None, self.n_capsule, self.dim_capsule)
-    
-
-
-class Attention(Layer):
-    """
-    Keras Layer that implements an Attention mechanism for temporal data.
-    Supports Masking.
-    Follows the work of Raffel et al. [https://arxiv.org/abs/1512.08756]
-    # Input shape
-        3D tensor with shape: `(samples, steps, features)`.
-    # Output shape
-        2D tensor with shape: `(samples, features)`.
-    :param kwargs:
-    Just put it on top of an RNN Layer (GRU/LSTM/SimpleRNN) with return_sequences=True.
-    The dimensions are inferred based on the output shape of the RNN.
-    Example:
-        # 1
-        model.add(LSTM(64, return_sequences=True))
-        model.add(Attention())
-        # next add a Dense layer (for classification/regression) or whatever...
-        # 2
-        hidden = LSTM(64, return_sequences=True)(words)
-        sentence = Attention()(hidden)
-        # next add a Dense layer (for classification/regression) or whatever...
-    代码源自：https://github.com/ShawnyXiao/TextClassification-Keras/blob/master/model/HAN/attention.py
-    """
-    def __init__(self, step_dim, W_regularizer=None, b_regularizer=None, W_constraint=None, b_constraint=None, bias=True, **kwargs):
-        self.supports_masking = True
-        self.init = initializers.get('glorot_uniform')
-        self.W_regularizer = regularizers.get(W_regularizer)
-        self.b_regularizer = regularizers.get(b_regularizer)
-        self.W_constraint = constraints.get(W_constraint)
-        self.b_constraint = constraints.get(b_constraint)
-        self.bias = bias
-        self.step_dim = step_dim
-        self.features_dim = 0
-        super(Attention, self).__init__(**kwargs)
-
-
-    def build(self, input_shape):
-        assert len(input_shape) == 3
-        self.W = self.add_weight(shape=(input_shape[-1], ), name='{}_W'.format(self.name),
-                                 initializer=self.init, regularizer=self.W_regularizer, constraint=self.W_constraint)
-        self.features_dim = input_shape[-1]
-        if self.bias:
-            self.b = self.add_weight(shape=(input_shape[1], ), name='{}_b'.format(self.name),
-                                     initializer='zero', regularizer=self.b_regularizer, constraint=self.b_constraint)
-        else:
-            self.b = None
-        self.built = True
-
-
-    def compute_mask(self, input, input_mask=None):
-        # do not pass the mask to the next layers
-        return None
-
-
-    def call(self, x, mask=None):
-        """
-        简写：result=sum(p(x)*x)   p(x)=softmax(tanh(Wx+b))  加性模型
-        """
-        features_dim = self.features_dim
-        step_dim = self.step_dim
-        e = K.reshape(K.dot(K.reshape(x, (-1, features_dim)), K.reshape(self.W, (features_dim, 1))), (-1, step_dim))  # e = K.dot(x, self.W)
-        if self.bias:
-            e += self.b
-        e = K.tanh(e)       # e = tanh(Wx + b)
-        a = K.exp(e)        # a = exp(e)
-        # apply mask after the exp. will be re-normalized next
-        if mask is not None:
-            a *= K.cast(mask, K.floatx())   # cast the mask to floatX to avoid float64 upcasting in theano
-        # In some cases especially in the early stages of training, the sum may be almost zero and this results in NaN's.
-        # A workaround is to add a very small positive number ε to the sum.
-        a /= K.cast(K.sum(a, axis=1, keepdims=True) + K.epsilon(), K.floatx())    # a = softmax(e) = softmax(tanh(Wx + b)) = p(x) 表示一种权重
-        a = K.expand_dims(a)
-        result = K.sum(a * x, axis=1)    # result = sum(p(x) * x)  对x加权求和
-        return result
-
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[0], self.features_dim
-    
-    
-    
-class AttentionSelf(Layer):
-    """
-    Self Attention, codes from: https://blog.csdn.net/xiaosongshine/article/details/90600028
-    代码源自：https://github.com/yongzhuo/Keras-TextClassification/blob/master/keras_textclassification/keras_layers/attention_self.py
-    """
-    def __init__(self, output_dim, **kwargs):
-        self.output_dim = output_dim
-        super().__init__(**kwargs)
-
-
-    def build(self, input_shape):
-        # W、K and V
-        self.kernel = self.add_weight(name='WKV', shape=(3, input_shape[2], self.output_dim), trainable=True,
-                                      initializer='uniform', regularizer=regularizers.L1L2(0.0000032))
-        super().build(input_shape)
-
-
-    def call(self, x):
-        WQ = K.dot(x, self.kernel[0])
-        WK = K.dot(x, self.kernel[1])
-        WV = K.dot(x, self.kernel[2])
-        print("WQ.shape", WQ.shape)
-        print("K.permute_dimensions(WK, [0, 2, 1]).shape", K.permute_dimensions(WK, [0, 2, 1]).shape)
-        
-        QK = K.batch_dot(WQ, K.permute_dimensions(WK, [0, 2, 1]))
-        QK = QK / (64 ** 0.5)
-        QK = K.softmax(QK)
-        print("QK.shape", QK.shape)
-        
-        V = K.batch_dot(QK, WV)
-        return V
-
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], input_shape[1], self.output_dim)
-
