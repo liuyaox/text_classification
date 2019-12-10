@@ -162,7 +162,7 @@ class AttentionSelf(Layer):
         # batch_dot: 即batch-wise dot product，X与Y同一batch分别是Xi和Yi，则dot(Xi, Yi.T)为该batch的结果，遍历所有batch
         # 当axes!=None时另说
         QK = K.batch_dot(QX, K.permute_dimensions(KX, [0, 2, 1]))
-        QK = QK / (64 ** 0.5)
+        QK = QK / (64 ** 0.5)   # TODO 64是不是应该改为self.output_dim更合适一些？！？因为KX's shape=(, input_shape[1], output_dim)，KX的维度是output_dim
         QK = K.softmax(QK)
         print("QK.shape", QK.shape)
         
