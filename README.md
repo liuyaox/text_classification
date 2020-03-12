@@ -202,13 +202,15 @@ Sklearn 0.21.3
 
 ### Train
 
-项目入口脚本：[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)
+Step1: 运行DataPreprocessing.py，基于已标注数据生成训练数据并保存本地
 
-该脚本包含项目全流程，包括：数据准备、Token筛选、特征和Label编码、划分Train/Test、环境配置、模型生成、模型训练和评估、模型持久化，详见脚本注释。
+Step2: 运行Embedding.py，自己训练Embedding，读取公开训练的Embedding，支持char+word两种粒度
 
-需要补充一点：在运行该脚本前，需要先准备好Embedding、Vocabulary、结构化特征等，详见Data Preprocessing部分。
+Step3: 运行Vocabulary.py，生成词汇表，基于Embedding生成映射字典，生成Embedding Layer初始化权重矩阵等，支持char+word两种粒度
 
-命令行功能暂未添加，后续会添加。
+Step4: 运行FeatureStructured.py，生成TFIDF特征和LSA特征，支持word+char两种粒度
+
+Step5: 运行[ModelTrain.py](https://github.com/liuyaox/text_classification/blob/master/ModelTrain.py)，项目全流程，包括：数据准备、Token筛选、特征和Label编码、划分Train/Test、环境配置、模型生成、模型训练和评估、模型持久化，详见脚本注释。
 
 运行脚本：python3 ModelTrain.py
 
